@@ -1,6 +1,6 @@
-import {BOARD_KEY,emptyBoard,today,validDate,normalizeRfiRecords,mergeRfiRecords,applyJevClassification,due,rankable,recommend,wakeSnoozed,change,reorder,planCandidates,generatePlan,resetDemoBoard} from './demo3-core.js?v=20261112-reset';
-import {JEV_PRIORITY_CATEGORIES,JEV_PRIORITY_LABELS} from './jev-priority.js?v=20261109-sharepoint';
-import {parseCSV} from './rfi-data.js?v=20261110-rfi-upload';
+import {BOARD_KEY,emptyBoard,today,validDate,normalizeRfiRecords,mergeRfiRecords,applyJevClassification,due,rankable,recommend,wakeSnoozed,change,reorder,planCandidates,generatePlan,resetDemoBoard} from './demo3-core.js?v=20261117-reset';
+import {JEV_PRIORITY_CATEGORIES,JEV_PRIORITY_LABELS} from './jev-priority.js?v=20261117-sharepoint';
+import {parseCSV} from './rfi-data.js?v=20261117-rfi-upload';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const SAMPLE_ORIGIN='answerTest.json';
