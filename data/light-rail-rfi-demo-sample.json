@@ -10,15 +10,6 @@
       "provenance": "User-provided 10-RFI demo sample; verify source and current status."
     },
     {
-      "rfi_id": "R200-CRE-06678",
-      "title": "R200-REC-04732 RFI 00130 E31 Switchboard NEMA Rating",
-      "description": "SWK is working on procurement for SWBD-01 at the E31 Station. There is conflicting information about the requirements for this equipment: Specification section 26 24 13 2.01 B.10 calls for switchboard enclosures to be NEMA 1. Drawing E31-EPS953 calls for Switchboard enclosures to be NEMA 12. DCM chapter 23 calls for switchboard enclosures to be NEMA 12. However, no manufacturer makes a NEMA 12 switchboard enclosure, they are only produced in NEMA 1 or NEMA 3R. A 3R enclosure will add doors to the enclosure, SWK has verified that the equipment size will still work with the current room layout. Please confirm if a NEMA 1 or NEMA 3R enclosure is acceptable for E31-SWBD-01.",
-      "submitted_date": "2022-04-21",
-      "due_date": "2022-05-11",
-      "package_id": "Light Rail East Expansion",
-      "provenance": "User-provided 10-RFI demo sample; verify source and current status."
-    },
-    {
       "rfi_id": "R200-CRE-07033",
       "title": "R200-REC-04734 RFI 00133 EP29 FACP Location",
       "description": "PR 7.1.3.2.3 directs SWK to place the Fire Alarm Control Panel (FACP) at the EP29 Garage in the Electrical Room. This does not conform to City of Redmond Fire requirements to have the FACP in the Fire Sprinkler Riser Room (FSRR). This conflict was raised by SWK during the design phase with alternative solutions presented. After presenting this in the Task Force Meeting SWK was directed on 02/14/2020 to leave the FACP in the electrical room and RFD would accept this. The design proceeded as such to the IFC milestone. During review of the fire alarm permit drawings in April 2022, RFD said they will not approve the design without the FACP in the FSRR. A meeting was held on 5/13/2022 to determine the direction to allow RFD to approve these permit drawings, it was determined that the FACP needs to relocated to the FSRR, with the connection to the ST DDC and EVS needs to be maintained. Please confirm and provide appropriate change direction that SWK should proceed with design and construction rework to change the location of the FACP from the Electrical Room to the FSRR at EP29.",
@@ -91,7 +82,7 @@
       "provenance": "User-provided 10-RFI demo sample; verify source and current status."
     }, 
     {
-      "rfi_id": "R200-REC-10432",
+      "rfi_id": "R200-CRE-10432",
       "title": "R200-REC-10432 RFI 00250 DTS Fire Alarm and BMS Door Unlock",
       "description": "The Project Requirements Section 8.4.14 state that the access control system should: C. Release emergency egress door locks upon actuation of the automatic sprinkler system. D. Release emergency egress door locks upon actuation of the fire detection system. E. Release emergency egress door locks upon loss of power to the locking device. F. Release emergency egress door locks upon receiving command from the station Fire Control Room, LCC or Union Station remote monitoring This function would need to operate though the BMS to operate properly due to device interfaces. A question was raised during the E31 BMS FAT regarding which doors should be unlocked in the event of a fire alarm/sprinkler actuation. Specification 08 71 00 confirms that all doors with an access controller on the emergency evacuation path of the E31 station have free egress. Past Sound Transit project have unlocked the exterior door of the Fire Sprinkler Riser Room in the event of an alarm to allow Fire Department Access. Please confirm which if any doors at E31 station should be unlocked in the event of a fire alarm or sprinkler actuation.",
       "submitted_date": "2024-03-13",
@@ -104,7 +95,7 @@
       "title": "R200-REC-03015 RFI 00110 Fiber Optic Cable Subcomponent for Buy America",
       "description": "The attached letter from the FTA defines the components of a traffic signal system as mast arms, mast bases, control system, traffic signals, pedestrian crossing signals, pedestrian crossing buttons, street lights and street name signs. Fiber Optic cable is used to connect controllers as part of the control system for traffic signals, making it a subcomponent. Please confirm that SWK is able to define Fiber Optic cable for traffic systems as a subcomponent, consistent with the FTA determination dated Jun 8, 2011, and Buy America documentation doesn't need to be provided for this material.",
       "submitted_date": "2021-10-12",
-      "due_date": "2021=11-20",
+      "due_date": "2021-11-20",
       "package_id": "Light Rail East Expansion",
       "provenance": "User-provided 10-RFI demo sample; verify source and current status."
     },
@@ -131,7 +122,7 @@
       "title": "R200-REC-00764 RFI 00043 Groundwater Elevation at South East Redmond Garage",
       "description": "As part of the City of Redmond review of the CSC#2 permit application for the EWB design package, SWK received a comment to utilize an elevation for the seasonal high groundwater which differed from the groundwater data included in the Contract Documents.\nSection 3.1.1 (Geotechnical Data Report) of the Project Requirements states \"The GDR contains borehole records, laboratory results, and in situ test results collected by Sound Transit. The Contractor can rely upon the accuracy of the data obtained and presented in the GDR\". The same section of the Project Requirements references Volume 1, Design-Build General Conditions 00 72 00 for additional requirements related to geotechnical information. The General Conditions 00 72 00 Section 1.07 B.1. states \"If a Geotechnical Baseline Report (GBR) is provided with the Request for Proposal (RFP) documents, then it shall be used and relied upon by the Proposers(s) to develop their Proposals.\"\nConsistent with the information provided above, the SWK team used the following Contract Document data to evaluate the groundwater elevations on the project:\n•Vol 3.05.01 Downtown Redmond Link Extension Geotechnical Baseline Report – prepared by Golder Associates Inc. dated October 4, 2018\n•Vol 3.05.02 Downtown Redmond Link Extension Geotechnical Data Report – prepared by Golder Associates Inc. dated July 24, 2018\n•Vol 3.05.03 Historical Geotechnical Borehole Records – prepared by Golder Associates Inc. dated September 25, 2018\nBased upon the GDR information and the additional borings within area, the SWK team determined the design groundwater elevation to be 33ft for the South East Redmond Garage area.\nThe City of Redmond Stormwater Technical Notebook states \"To determine ground water depth the average seasonal high water shall be identified during the wet weather season.\" The Contract Document information provides groundwater information obtained during periods considered wet weather per Chapter 10 of the notebook.\nFollowing the City of Redmond's review of EWB CSC#2 permit application, SWK received a comment on the Garage Foundation Ground Improvements to use an elevation of 35.97 ft for the seasonal high groundwater. SWK understands that this is based on the City's data and analysis over a 10-year period. Since this data was not provided as part of the Contract Documents, it was not used to determine the design groundwater elevation around the SE Redmond Garage.\nUtilization of the higher groundwater elevation provided by the City of Redmond presents significant design challenges in the vicinity of the South East Redmond Station and may impact design of civil, drainage, roadway, station, garage and track elements.",
       "submitted_date": "2020-08-07",
-      "due_date": "Null",
+      "due_date": null,
       "package_id": "Light Rail East Expansion",
       "provenance": "User-provided 10-RFI demo sample; verify source and current status."
     } 
