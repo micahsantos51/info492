@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
 import {
   buildJevPriorityRequest,
+  JEV_PRIORITY_CRITERIA,
+  JEV_PRIORITY_INSTRUCTIONS,
   validateJevPriorityResponse,
 } from "../js/jev-priority.js";
+
+const promptVersion = createHash("sha256")
+  .update(JSON.stringify([JEV_PRIORITY_INSTRUCTIONS, JEV_PRIORITY_CRITERIA]))
+  .digest("hex").slice(0, 12);
 
 const inputFields = ["submitted_date", "due_date", "description"];
 const categories = new Set(["low", "mid", "high", "lacking_info"]);
@@ -100,5 +106,5 @@ export function createJevPriorityService({
     }
   }
 
-  return { classify, configured, model };
+  return { classify, configured, model, promptVersion };
 }

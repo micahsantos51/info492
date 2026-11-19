@@ -27,6 +27,8 @@ async function walk(dir) {
 }
 for (const file of FILES) await copyFile(file);
 for (const dir of DIRS) await walk(dir);
+// The Worker serves both the UI and its API. Pages keeps its separately hosted endpoint.
+await writeFile(join(root, "dist/data/jev-config.json"), JSON.stringify({ backend_origin: "" }, null, 2) + "\n");
 await writeFile(
   join(root, "dist/_headers"),
   "/*\n  Cache-Control: no-store\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n",

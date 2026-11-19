@@ -65,3 +65,12 @@ test("touch relies on click, keyboard arrows wrap, Escape restores trigger and o
   h.fire(h.root, "pointerdown");
   assert.equal(h.panel.hidden, true);
 });
+
+test("the first desktop click keeps a hover-open menu available for selecting a demo", () => {
+  const h = harness();
+  h.fire(h.host, "pointerenter", { pointerType: "mouse" });
+  h.fire(h.trigger, "click", { detail: 1 });
+  assert.equal(h.panel.hidden, false);
+  h.fire(h.trigger, "click", { detail: 1 });
+  assert.equal(h.panel.hidden, true);
+});

@@ -110,7 +110,7 @@ npm test
 npm run build
 ```
 
-`build` validates CSVs and all local HTML references. This is a static site, so it does not emit a bundle: the repository files are the production artifacts. Keep HTML, CSS, JS and `data/` together. The active GitHub Pages deployment uses **`fixed` / root** (verified October 30, 2026); `gh-page` is an older publication branch. Pushing only `main` does not publish changes. Update the publication branch too and verify its Pages deployment succeeds. Increment asset version query strings after CSS/JS changes to avoid stale caches.
+`build` validates CSVs and all local HTML references. This is a static site, so it does not emit a bundle: the repository files are the production artifacts. Keep HTML, CSS, JS and `data/` together. GitHub Pages publishes the repository root from `main`. A feature branch or draft pull request can be previewed locally before merge. Increment asset version query strings after CSS/JS changes to avoid stale caches.
 
 ## Assignment materials
 
@@ -136,7 +136,7 @@ Demo 2 consumes an explicit submission-only field whitelist; retrospective field
 
 ## Demo 2 AI RFI Prioritization Agent
 
-The header now uses **Demo Menu** on the homepage and both demos. Demo 1 remains at `dashboard.html`; Demo 2 is `demo2.html`. Future demos are disabled Coming soon entries. Demo 1's source data, dashboard logic, task study and styles are unchanged.
+The header now uses **Demo Menu** on the homepage and both demos. Demo 1 remains at `dashboard.html`; Demo 2 is `demo2.html`. The same menu opens Demo 3’s daily board and Demo 4’s role-based exchange. Demo 1's source data, dashboard logic, task study and styles are unchanged.
 
 ```sh
 npm test
@@ -168,3 +168,20 @@ Open [Daily To-Do](demo3.html), select a CSV or JSON file up to 256 KB with 1–
 - [Page](demo3.html) · [Styles](css/demo3.css) · [UI](js/demo3.js) · [Shared handoff / board logic](js/demo3-core.js) · [Tests](tests/demo3-core.test.js)
 - Uses the current Demo 2 backend and data contract, with no new runtime package dependencies.
 - The review board is local to the browser; there are no authenticated roles, team sync or automatic source-RFI updates. Jev intake supports CSV and JSON (not PDF/Word extraction). Illustrative examples are labeled and do not call the model. See [Demo 3 workflow and setup limits](docs/DEMO3.md).
+
+
+## Demo 4 — RFI Exchange
+
+[Choose a participant](signin.html) to follow one project RFI between the GC submitter and the technical responder. The GC confirms the review priority and routes the question. The responder can request clarification or issue a signed response. The submitter records receipt. Both roles can trace the exchange on the same RFI and revision in the same browser profile. [Rehearsal and stakeholder test](docs/role-workspaces.md)
+
+For local live assessments, start the Node backend with a server-side `JEV_API_KEY` and open its `signin.html`. A configured Node server and the Worker build use their own origin for JEV. The static Pages site uses its published connection settings. The labeled simulated conflict exercise works without a provider key.
+
+**Calibrating JEV with reviewed cases.** In the GC workspace, choose **Export review decisions**. Each decision retains the proposals seen at the time, their input snapshot, the human priority and the reason. Inspect disagreements on development RFIs, edit the team's shared [JEV prompt and rubric](js/jev-priority.js), then rerun held-out RFIs. Reserve whole RFI IDs for the held-out set so different revisions of the same question do not appear on both sides. Reordering a daily plan has no effect on these labels.
+
+Score a decisions export locally against a separately prepared CSV with columns `rfi_id,revision,final_label`. Labels can be High, Medium, Low or lacking_info. For example, if your files are in the Git-ignored `.private` directory, run:
+
+```sh
+node scripts/score-jev.js .private/decisions.json .private/reference.csv
+```
+
+The report compares the first recorded live proposal per case for each model and prompt version. It gives the matching count, missing predictions, and each disagreement. The denominator includes every independently labeled case. Simulated recommendations are excluded. An older backend may leave the model and prompt version unknown. Review corrections with the team before using them to adjust the rubric. The application does not train JEV when a user clicks a priority.

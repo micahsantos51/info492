@@ -1,7 +1,8 @@
-import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard } from './demo3-core.js?v=20261112-reset';
-import { JEV_PRIORITY_CATEGORIES, JEV_PRIORITY_LABELS } from './jev-priority.js?v=20261109-sharepoint';
+import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard, jevInputForBoardItem, refreshClassificationState } from './demo3-core.js?v=20261118-source-evidence';
+import { JEV_PRIORITY_LABELS } from './jev-priority.js?v=20261109-sharepoint';
+import { describeEvidence, renderAssessmentEvidence } from './jev-evidence.js';
+import { requestJevEvaluation } from './workspace-assessment.js';
 import { parseCSV } from './rfi-data.js?v=20261110-rfi-upload';
-import { analyzeDescriptionEvidence } from './jev-evidence.js?v=20261118-evidence';
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const SAMPLE_ORIGIN = 'answerTest.json';
@@ -10,15 +11,22 @@ let configured = false, backendOrigin = '', batchRunning = false;
 $('day').value = today();
 const day = () => $('day').value || today();
 const say = t => $('notice').textContent = t;
-try { const saved = JSON.parse(localStorage.getItem(BOARD_KEY) || 'null'); if (saved?.version === 2 && Array.isArray(saved.items) && Array.isArray(saved.audit)) board = saved; board.project = ''; } catch { say('Saved board could not be loaded.'); }
+try { const saved = JSON.parse(localStorage.getItem(BOARD_KEY) || 'null'); if (saved?.version === 2 && Array.isArray(saved.items) && Array.isArray(saved.audit)) {
+  board = saved;
+  for (const item of board.items) {
+    if (item.classification_state === 'pending') item.classification_state = 'not_classified';
+    refreshClassificationState(item);
+  }
+} board.project = ''; } catch { say('Saved board could not be loaded.'); }
 function save() { try { localStorage.setItem(BOARD_KEY, JSON.stringify(board)); $('saved').textContent = `Saved here · ${new Date().toLocaleTimeString()}`; return true; } catch { $('saved').textContent = 'Could not save. Export your board.'; return false; } }
 function mutate(fn) { undo = structuredClone(board); try { fn(); save(); render(); } catch (e) { board = undo; undo = null; say(e.message); } }
 function scope() { return board.items; }
 function matches(x) { return `${x.record.rfi_id} ${x.record.title} ${x.owner || ''}`.toLowerCase().includes($('search').value.toLowerCase()); }
+const needsClassification = item => item.classification_state !== 'pending'
+  && (!item.classification || item.classification_state === 'stale' || item.classification_state === 'error');
 const label = x => x.classification ? JEV_PRIORITY_LABELS[x.classification.category] : 'Not classified';
-function badges(x) { const kind = x.classification ? x.classification.category : 'unclassified'; return `<span class="badge ${esc(kind)}">${esc(label(x))}</span>${x.classification ? `<span class="badge">${Math.round(x.classification.confidence * 100)}%</span>` : ''}${x.classification_state === 'pending' ? '<span class="badge">Working…</span>' : ''}${x.classification_state === 'error' ? '<span class="badge warning-badge">Try again</span>' : ''}`; }
+function badges(x) { const kind = x.classification ? x.classification.category : 'unclassified'; return `<span class="badge ${esc(kind)}">${esc(label(x))}</span>${x.classification ? `<span class="badge">${Math.round(x.classification.confidence * 100)}%</span>` : ''}${x.classification_state === 'stale' ? '<span class="badge warning-badge">Previous inputs</span>' : ''}${x.classification_state === 'pending' ? '<span class="badge">Working…</span>' : ''}${x.classification_state === 'error' ? '<span class="badge warning-badge">Try again</span>' : ''}`; }
 function dateText(x, kind) { const date = kind === 'suggested' ? (validDate(x.due_override) ? x.due_override : x.record.due_date) : due(x); return date ? `${date}${date < day() ? ' · overdue' : date === day() ? ' · today' : ''}` : 'No date'; }
-function evidenceMarkup(description) { const evidence = analyzeDescriptionEvidence(description); return `<section class="evaluation-evidence"><h3>Description evidence</h3><p class="small">These indicators reflect explicit wording found in the RFI description only; they do not establish actual cost or schedule impact.</p><dl>${evidence.map(item => `<div><dt>${esc(item.label)}</dt><dd><strong>${esc(item.summary)}</strong>${item.excerpts.map(excerpt => `<blockquote>${esc(excerpt)}</blockquote>`).join('')}</dd></div>`).join('')}</dl></section>`; }
 function why(x) { if (x.followup_due && x.followup_due <= day()) return 'Follow-up due'; if (due(x) && due(x) <= day()) return 'Due now'; return x.result.priority_reason || 'Not classified'; }
 const button = (action, text, key, cls = '') => `<button class="${cls}" data-action="${action}" data-key="${esc(key)}">${text}</button>`;
 function card(x, kind, index) {
@@ -32,7 +40,7 @@ function render() {
   wakeSnoozed(board, day()); for (const x of board.items) if (x.status === 'reviewed' && x.followup && x.followup <= day()) { x.history.push({ date: x.reviewed_date, outcome: x.outcome, note: x.note }); x.status = 'suggested'; x.followup_due = x.followup; x.followup = ''; }
   $('capacity').value = board.capacity;
   const list = scope(), planned = list.filter(x => x.status === 'planned').sort((a, b) => a.order - b.order), reviewed = list.filter(x => x.status === 'reviewed' && x.reviewed_date === day()), candidates = planCandidates(list, day()); suggestedRanks = new Map(candidates.map((x, i) => [x.key, i + 1]));
-  $('generate').disabled = !candidates.length; $('classify-all').disabled = batchRunning || !board.items.some(x => !x.classification && x.classification_state !== 'pending'); $('plan-preview').textContent = `${candidates.length} ready · ${board.items.filter(x => !x.classification).length} to classify`;
+  $('generate').disabled = !candidates.length; $('classify-all').disabled = batchRunning || !board.items.some(needsClassification); $('plan-preview').textContent = `${candidates.length} ready · ${board.items.filter(needsClassification).length} to classify`;
   $('counts').textContent = `${planned.length} planned · ${list.filter(x => x.classification?.category === 'lacking_info').length} need info · ${reviewed.length} reviewed`;
   const suggestions = [...list.filter(x => x.status === 'suggested' && !rankable(x)), ...recommend(list, day())].filter(matches); $('suggestions').innerHTML = suggestions.slice(0, board.capacity).map(x => card(x, 'suggested')).join('') || '<p class="empty-note">No matching RFIs.</p>';
   if (suggestions.length > board.capacity) $('suggestions').innerHTML += `<p class="small">${suggestions.length - board.capacity} more. Raise the daily limit to see them.</p>`;
@@ -55,13 +63,12 @@ $('confirm-reset').onclick = () => {
   $('undo').focus();
 };
 $('restore').onclick = () => mutate(() => { const items = scope().filter(x => x.status === 'planned'), sorted = recommend(items.map(x => ({ ...x, status: 'suggested' })), day()), keys = sorted.map(x => x.key); for (const x of items) { x.order = keys.includes(x.key) ? keys.indexOf(x.key) : keys.length + x.order; x.manual = false; } board.audit.push({ at: new Date().toISOString(), action: 'restore-order', project: board.project }); });
-function evaluationInput(item, dueDate = item.due_override) { return { submitted_date: item.record.submitted_date || null, due_date: validDate(dueDate) ? dueDate : item.record.due_date || null, description: item.record.description || null }; }
-function inputKey(item, dueDate) { return JSON.stringify(evaluationInput(item, dueDate)); }
-function updateClassifyButton() { const item = board.items.find(x => x.key === active); if (!item) return; const currentInput = JSON.stringify(evaluationInput(item, $('due').value)); const unchangedClassification = item.classification && item.classification_input === currentInput; $('classify-one').disabled = item.classification_state === 'pending' || Boolean(unchangedClassification); }
+function updateClassifyButton() { const item = board.items.find(x => x.key === active); if (!item) return; const currentInput = JSON.stringify(jevInputForBoardItem(item, $('due').value)); const unchangedClassification = item.classification && item.classification_input === currentInput; $('classify-one').disabled = item.classification_state === 'pending' || Boolean(unchangedClassification); }
 function saveReviewDueDate(item, date) {
   if (item.due_override === date) return true;
   const previous = structuredClone(board), previousUndo = undo;
   item.due_override = date;
+  refreshClassificationState(item);
   board.audit.push({ at: new Date().toISOString(), key: item.key, action: 'planning-details', date, owner: item.owner || '' });
   if (!save()) { board = previous; undo = previousUndo; render(); say('Planning details were not saved. Your previous date has been kept.'); return false; }
   undo = previous;
@@ -71,19 +78,93 @@ function saveReviewDueDate(item, date) {
 function setConnectionStatus(message) { const status = $('jev-connection-status'); if (status) status.textContent = message; }
 async function checkConnection() { setConnectionStatus('Connecting to Jev… The first check can take about a minute after the service has been idle.'); try { const response = await fetch(`${backendOrigin}/api/jev/config`, { cache: 'no-store', signal: AbortSignal.timeout(75000) }); let config; try { config = await response.json(); } catch { throw Error(`Backend returned HTTP ${response.status} without Jev configuration metadata.`); } if (!response.ok) throw Error(config.error || `Backend error (HTTP ${response.status}).`); if (config.token_required) throw Error('The deployed backend still requires a team token. Deploy the current server version.'); configured = config.configured === true && !config.token_required; setConnectionStatus(configured ? 'Ready · no visitor key or backend settings needed.' : 'Jev is not configured on the backend. The site owner must add the server-side Jev key.'); } catch (error) { configured = false; const reason = error instanceof TypeError ? 'The browser could not reach the backend (network or CORS).' : error.message; setConnectionStatus(`Jev unavailable: ${reason} The backend ALLOWED_ORIGINS must include ${location.origin}; confirm the current server is deployed and awake.`); } }
 async function initializeConnection() { try { const response = await fetch('data/jev-config.json', { cache: 'no-store' }); if (!response.ok) throw Error(`Could not load the Jev backend address (HTTP ${response.status}).`); const config = await response.json(); backendOrigin = config.backend_origin ? new URL(config.backend_origin).origin : location.origin; } catch (error) { backendOrigin = location.origin; setConnectionStatus(`Jev setup unavailable: ${error.message}`); } await checkConnection(); }
-function validateEvaluation(payload, id) { const result = payload?.evaluation; if (payload?.rfi_id !== id || !result || Object.keys(result).length !== 2 || !JEV_PRIORITY_CATEGORIES.includes(result.category) || typeof result.confidence !== 'number' || !Number.isFinite(result.confidence) || result.confidence < 0 || result.confidence > 1) throw Error('The backend returned an invalid classification. No result was saved.'); return { category: result.category, confidence: result.confidence }; }
 async function classifyItem(key) {
-  const item = board.items.find(x => x.key === key); if (!item || item.classification_state === 'pending') return false; if (!$('jev-consent').checked) { say('Allow Jev to review the imported RFI first.'); $('jev-consent').focus(); return false; } if (!configured) await checkConnection(); if (!configured) { say('Jev is not available.'); return false; }
-  if (!board.items.includes(item)) return false;
-  const requestInput = evaluationInput(item), keyForInput = JSON.stringify(requestInput); if (item.classification && item.classification_input === keyForInput) return true; item.classification_state = 'pending'; render(); updateClassifyButton(); try { const response = await fetch(`${backendOrigin}/api/jev/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rfi_id: item.record.rfi_id, evaluation_input: requestInput }), signal: AbortSignal.timeout(20000) }); let payload; try { payload = await response.json(); } catch { throw Error('The backend returned an unreadable response.'); } if (!response.ok) throw Error(payload.error || `Classification failed (HTTP ${response.status}).`); const evaluation = validateEvaluation(payload, item.record.rfi_id); applyJevClassification(item, evaluation, keyForInput); item.classification_state = 'classified'; board.audit.push({ at: new Date().toISOString(), key: item.key, action: 'jev-classification', category: evaluation.category, confidence: evaluation.confidence }); save(); say(`${item.record.rfi_id} classified: ${JEV_PRIORITY_LABELS[evaluation.category]} · ${Math.round(evaluation.confidence * 100)}% confidence.`); return true; } catch (error) { item.classification_state = 'error'; item.result.priority_reason = `Classification failed: ${error.message}`; say(`${item.record.rfi_id}: ${error.message}`); return false; } finally { render(); if (active === key) openDetail(key); }
+  const item = board.items.find(x => x.key === key);
+  if (!item || item.classification_state === 'pending') return false;
+  if (!$('jev-consent').checked) {
+    say('Allow Jev to review the imported RFI first.');
+    $('jev-consent').focus();
+    return false;
+  }
+  if (!configured) await checkConnection();
+  if (!configured) { say('Jev is not available.'); return false; }
+  if (!board.items.includes(item) || item.classification_state === 'pending' || !$('jev-consent').checked) return false;
+
+  const requestInput = jevInputForBoardItem(item);
+  const keyForInput = JSON.stringify(requestInput);
+  if (item.classification && item.classification_input === keyForInput) {
+    refreshClassificationState(item);
+    return true;
+  }
+  item.classification_state = 'pending';
+  render();
+  updateClassifyButton();
+  try {
+    const evaluation = await requestJevEvaluation(backendOrigin, item.record.rfi_id, requestInput);
+    if (!board.items.includes(item)) return false;
+    applyJevClassification(item, evaluation, keyForInput);
+    refreshClassificationState(item);
+    board.audit.push({ at: item.analyzed_at, key, action: 'jev-classification',
+      category: evaluation.category, confidence: evaluation.confidence, model: evaluation.model, promptVersion: evaluation.promptVersion });
+    save();
+    say(item.classification_state === 'stale'
+      ? `${item.record.rfi_id} changed during evaluation. Classify again with the current inputs.`
+      : `${item.record.rfi_id} classified: ${JEV_PRIORITY_LABELS[evaluation.category]} · ${Math.round(evaluation.confidence * 100)}% confidence.`);
+    return true;
+  } catch (error) {
+    item.classification_state = 'error';
+    item.result.priority_reason = `Classification failed: ${error.message}`;
+    say(`${item.record.rfi_id}: ${error.message}`);
+    return false;
+  } finally {
+    render();
+    if (active === key && $('detail').open) openDetail(key);
+  }
 }
-$('classify-all').onclick = async () => { const pending = board.items.filter(x => !x.classification && x.classification_state !== 'pending').slice(0, 50); if (!$('jev-consent').checked) return say('Allow Jev to review the selected RFIs first.'); batchRunning = true; render(); try { for (let i = 0; i < pending.length; i++) { say(`Classifying ${pending[i].record.rfi_id} (${i + 1} of ${pending.length})…`); if (!await classifyItem(pending[i].key)) break; } } finally { batchRunning = false; render(); } };
-function openDetail(key) { active = key; const x = board.items.find(i => i.key === key); if (!x) return; $('detail-title').textContent = `${x.record.rfi_id} — ${x.record.title}`; $('detail-body').innerHTML = `<div class="flags">${badges(x)}</div><p><strong>Needed by:</strong> ${esc(x.record.due_date || 'Not provided')} · <strong>Submitted:</strong> ${esc(x.record.submitted_date || 'Not provided')}</p><p><strong>Priority:</strong> ${esc(x.result.priority_reason || 'Not classified yet.')}</p><p><strong>Description</strong></p><blockquote>${esc(x.record.description)}</blockquote>${x.classification ? `<p>Confidence: ${Math.round(x.classification.confidence * 100)}%</p>${evidenceMarkup(x.record.description)}` : ''}<p><strong>Next step:</strong> ${esc(x.result.suggested_gc_review_action)}</p>`; $('classify-one').textContent = x.classification ? 'Classify again' : 'Classify with Jev'; $('due').value = validDate(x.due_override) ? x.due_override : x.record.due_date || ''; $('owner').value = x.owner || ''; updateClassifyButton(); $('note').value = ''; $('followup').value = ''; $('form-error').textContent = ''; if (!$('detail').open) $('detail').showModal(); }
+$('classify-all').onclick = async () => { const pending = board.items.filter(needsClassification).slice(0, 50); if (!$('jev-consent').checked) return say('Allow Jev to review the selected RFIs first.'); batchRunning = true; render(); try { for (let i = 0; i < pending.length; i++) { say(`Classifying ${pending[i].record.rfi_id} (${i + 1} of ${pending.length})…`); if (!await classifyItem(pending[i].key)) break; } } finally { batchRunning = false; render(); } };
+function detailEvidence(item) {
+  const source = jevInputForBoardItem(item);
+  if (!item.classification) return renderAssessmentEvidence({evidence: describeEvidence(source)}, {preview: true});
+  let assessedInput;
+  try { assessedInput = JSON.parse(item.classification_input); } catch { /* older board */ }
+  if (!assessedInput || !Object.hasOwn(assessedInput, 'description')) {
+    return '<p>Source inputs for this assessment were not recorded.</p>';
+  }
+  const outdated = JSON.stringify(source) !== item.classification_input;
+  const notice = outdated ? '<p class="warning">These excerpts belong to a previous assessment. Classify again to assess the current inputs.</p>' : '';
+  return notice + renderAssessmentEvidence({evidence: describeEvidence(assessedInput)}, {expanded: true});
+}
+function renderDetailAssessment(item) {
+  const effectiveDate = due(item);
+  $('detail-body').innerHTML = `<div class="flags">${badges(item)}</div>
+    <p><strong>Needed by:</strong> ${esc(effectiveDate || 'Not provided')} · <strong>Submitted:</strong> ${esc(item.record.submitted_date || 'Not provided')}</p>
+    <p><strong>Priority:</strong> ${esc(item.result.priority_reason || 'Not classified yet.')}</p>
+    <p><strong>Description</strong></p><blockquote>${esc(item.record.description)}</blockquote>
+    ${detailEvidence(item)}
+    <p><strong>Next step:</strong> ${esc(item.result.suggested_gc_review_action)}</p>`;
+}
+function openDetail(key) {
+  active = key;
+  const item = board.items.find(entry => entry.key === key);
+  if (!item) return;
+  $('detail-title').textContent = `${item.record.rfi_id} — ${item.record.title}`;
+  renderDetailAssessment(item);
+  $('classify-one').textContent = item.classification ? 'Classify again' : 'Classify with Jev';
+  $('due').value = jevInputForBoardItem(item).due_date || '';
+  $('owner').value = item.owner || '';
+  updateClassifyButton();
+  if (!$('detail').open) {
+    $('note').value = '';
+    $('followup').value = '';
+    $('form-error').textContent = '';
+    $('detail').showModal();
+  }
+}
 document.addEventListener('click', e => { const b = e.target.closest('[data-action]'); if (!b) return; const { action, key } = b.dataset; if (action === 'review') return openDetail(key); if (action === 'classify') return classifyItem(key); if (action === 'snooze') { active = key; $('wake').value = ''; $('wake').min = day(); $('snooze-reason').value = ''; $('snooze-error').textContent = ''; $('snooze-dialog').showModal(); return; } mutate(() => { if (action === 'up' || action === 'down') { const list = scope().filter(x => x.status === 'planned').sort((a, b) => a.order - b.order), i = list.findIndex(x => x.key === key), target = list[i + (action === 'up' ? -1 : 1)]; if (target) reorder(board, key, target.key); } else change(board, key, action, {}, day()); }); });
 let pointerStart = null, dropKey = null; $('tasks').addEventListener('pointerdown', e => { const handle = e.target.closest('.handle'); if (!handle || e.button !== 0) return; const task = handle.closest('.task'); drag = task.dataset.key; pointerStart = [e.clientX, e.clientY]; dropKey = null; handle.setPointerCapture(e.pointerId); e.preventDefault(); }); $('tasks').addEventListener('pointermove', e => { if (!drag || !pointerStart || Math.hypot(e.clientX - pointerStart[0], e.clientY - pointerStart[1]) < 8) return; for (const c of $('tasks').querySelectorAll('.task')) { c.classList.toggle('dragging', c.dataset.key === drag); c.classList.remove('over'); } const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('#tasks .task'); dropKey = target?.dataset.key || null; if (target && dropKey !== drag) target.classList.add('over'); }); $('tasks').addEventListener('pointerup', () => { if (!drag) return; const source = drag, target = dropKey; drag = null; pointerStart = null; dropKey = null; if (source && target && source !== target) mutate(() => reorder(board, source, target)); else render(); }); $('tasks').addEventListener('pointercancel', () => { drag = null; pointerStart = null; dropKey = null; render(); });
 $('due').addEventListener('input', updateClassifyButton);
 $('due').addEventListener('change', updateClassifyButton);
-$('classify-one').onclick = () => { if (!active) return; const item = board.items.find(x => x.key === active); if (!item) return; if ($('due').value && !validDate($('due').value)) { $('form-error').textContent = 'Enter a valid date.'; return; } if (!saveReviewDueDate(item, $('due').value)) return; classifyItem(active); }; $('close-detail').onclick = () => $('detail').close(); $('cancel-snooze').onclick = () => $('snooze-dialog').close(); $('save-details').onclick = () => { if ($('due').value && !validDate($('due').value)) { $('form-error').textContent = 'Enter a valid date.'; return; } mutate(() => { const x = board.items.find(i => i.key === active); x.due_override = $('due').value; x.owner = $('owner').value.trim(); board.audit.push({ at: new Date().toISOString(), key: active, action: 'planning-details', date: x.due_override, owner: x.owner }); }); $('form-error').textContent = 'Planning details saved.'; updateClassifyButton(); };
+$('classify-one').onclick = () => { if (!active) return; const item = board.items.find(x => x.key === active); if (!item) return; if ($('due').value && !validDate($('due').value)) { $('form-error').textContent = 'Enter a valid date.'; return; } if (!saveReviewDueDate(item, $('due').value)) return; classifyItem(active); }; $('close-detail').onclick = () => $('detail').close(); $('cancel-snooze').onclick = () => $('snooze-dialog').close(); $('save-details').onclick = () => { if ($('due').value && !validDate($('due').value)) { $('form-error').textContent = 'Enter a valid date.'; return; } mutate(() => { const x = board.items.find(i => i.key === active); x.due_override = $('due').value; refreshClassificationState(x); x.owner = $('owner').value.trim(); board.audit.push({ at: new Date().toISOString(), key: active, action: 'planning-details', date: x.due_override, owner: x.owner }); }); renderDetailAssessment(board.items.find(i => i.key === active)); $('form-error').textContent = 'Planning details saved.'; updateClassifyButton(); };
 $('review-form').onsubmit = e => { e.preventDefault(); const previous = structuredClone(board); try { change(board, active, 'review', { outcome: $('outcome').value, note: $('note').value, followup: $('followup').value }, day()); undo = previous; save(); render(); $('detail').close(); say('Review saved.'); } catch (e) { board = previous; $('form-error').textContent = e.message; } }; $('snooze-form').onsubmit = e => { e.preventDefault(); try { const previous = structuredClone(board); change(board, active, 'snooze', { date: $('wake').value, reason: $('snooze-reason').value }, day()); undo = previous; save(); render(); $('snooze-dialog').close(); } catch (e) { $('snooze-error').textContent = e.message; } };
 $('source-list').addEventListener('change', e => { const id = e.target.dataset.sourceId; if (id) { if (e.target.checked && selectedIds.size >= 50) { e.target.checked = false; say('You can select up to 50 RFIs at a time.'); return; } if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id); renderSourceList(); } });
 $('select-visible').onchange = () => { const query = $('search').value.trim().toLowerCase(); for (const r of sampleRecords.filter(x => `${x.rfi_id} ${x.title}`.toLowerCase().includes(query))) { if (board.items.some(x => x.key === sourceKey(r))) continue; if ($('select-visible').checked) selectedIds.add(r.rfi_id); else selectedIds.delete(r.rfi_id); } renderSourceList(); };

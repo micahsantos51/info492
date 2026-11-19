@@ -4,16 +4,21 @@ export function initDemoMenus(root = document) {
     const trigger = host.querySelector("button"),
       panel = host.querySelector("[data-demo-panel]");
     let timer,
-      keyboardOpen = false;
+      keyboardOpen = false,
+      openedByHover = false;
     const links = () => [...panel.querySelectorAll("a")];
     const setOpen = (open) => {
       clearTimeout(timer);
       trigger.setAttribute("aria-expanded", String(open));
       panel.hidden = !open;
-      if (!open) keyboardOpen = false;
+      if (!open) {
+        keyboardOpen = false;
+        openedByHover = false;
+      }
     };
     host.addEventListener("pointerenter", (e) => {
       if (e.pointerType === "mouse") {
+        if (panel.hidden) openedByHover = true;
         keyboardOpen = false;
         setOpen(true);
       }
@@ -27,7 +32,9 @@ export function initDemoMenus(root = document) {
     });
     trigger.addEventListener("click", (e) => {
       keyboardOpen = e.detail === 0;
-      setOpen(panel.hidden);
+      const open = panel.hidden || openedByHover;
+      openedByHover = false;
+      setOpen(open);
     });
     host.addEventListener("focusout", () =>
       setTimeout(() => {

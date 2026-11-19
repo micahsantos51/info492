@@ -144,6 +144,8 @@ test("record ID stays in the app envelope and each API result is associated with
   const payload = await response.json();
   assert.equal(response.status, 200);
   assert.equal(payload.rfi_id, "RFI-77");
+  assert.match(payload.prompt_version, /^[a-f0-9]{12}$/);
+  assert.equal(typeof payload.model, "string");
   assert.deepEqual(payload.evaluation, { category: "high", confidence: 0.91 });
   assert.deepEqual(Object.keys(payload.evaluation), ["category", "confidence"]);
   assert.ok(!JSON.stringify(jevBody).includes("RFI-77"));
@@ -160,6 +162,8 @@ test("public classification endpoint needs no visitor token and keeps API failur
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const origin = `http://127.0.0.1:${server.address().port}`;
+  const connection = await fetch(origin + "/data/jev-config.json");
+  assert.deepEqual(await connection.json(), { backend_origin: "" });
   const configResponse = await fetch(origin + "/api/jev/config");
   const config = await configResponse.json();
   assert.equal(configResponse.status, 200);

@@ -41,9 +41,23 @@ export function mergeRfiRecords(board, records, origin = 'user-import') {
   board.updated = new Date().toISOString();
   return {added, updated};
 }
+export function jevInputForBoardItem(item, dueDate = item.due_override) {
+  return {
+    submitted_date: item.record.submitted_date || null,
+    due_date: validDate(dueDate) ? dueDate : item.record.due_date || null,
+    description: item.record.description || null,
+  };
+}
+export function refreshClassificationState(item) {
+  if (!item.classification || item.classification_state === 'pending') return;
+  const current = JSON.stringify(jevInputForBoardItem(item));
+  item.classification_state = current === item.classification_input ? 'classified' : 'stale';
+}
+
 export function applyJevClassification(item, evaluation, inputKey) {
   const priority = {high:'P0', mid:'P1', low:'P2'}[evaluation.category] || null;
-  item.classification = {category:evaluation.category, confidence:evaluation.confidence};
+  item.classification = {category:evaluation.category, confidence:evaluation.confidence,
+    model:evaluation.model || null, promptVersion:evaluation.promptVersion || null};
   item.classification_input = inputKey;
   item.classification_state = 'classified';
   item.result.priority = priority;
@@ -54,8 +68,10 @@ export function applyJevClassification(item, evaluation, inputKey) {
   item.analyzed_at = new Date().toISOString();
   return item;
 }
-export function due(item) { return validDate(item.due_override) ? item.due_override : validDate(item.result.decision_date) ? item.result.decision_date : ''; }
-export function rankable(item) { return ['P0','P1','P2'].includes(item.result.priority); }
+export function due(item) {
+  return [item.due_override, item.result.decision_date, item.record.due_date].find(validDate) || '';
+}
+export function rankable(item) { return !['stale', 'pending', 'error'].includes(item.classification_state) && ['P0','P1','P2'].includes(item.result.priority); }
 export function recommend(items, day) {
   return items.filter(x=>x.status==='suggested' && rankable(x)).sort((a,b)=>['P0','P1','P2'].indexOf(a.result.priority)-['P0','P1','P2'].indexOf(b.result.priority) || (due(a)||'9999').localeCompare(due(b)||'9999') || a.record.rfi_id.localeCompare(b.record.rfi_id) || a.key.localeCompare(b.key));
 }

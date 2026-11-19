@@ -1,138 +1,204 @@
-export const project = "East Link · Station Systems";
+export const project = "East Link · RFI exchange";
 export const contractor = "Meridian Constructors";
 export const designer = "Northline Design";
-
 export const roles = {
   submitter: {
-    name: "Alex Rivera", company: contractor, label: "RFI submitter",
-    title: "My RFIs", description: "Submit field questions, track decisions, and follow up on returned requests.",
-  },
-  checker: {
-    name: "Morgan Chen", company: contractor, label: "Checker",
-    title: "Review Queue", description: "Check incoming submissions for completeness and route approved RFIs.",
+    name: "Alex Rivera", company: contractor, label: "RFI submitter · GC coordinator",
+    title: "My RFIs", description: "Confirm review priority, route questions, and acknowledge the design team’s answers.",
   },
   responder: {
-    name: "Priya Shah", company: designer, label: "Responder",
-    title: "Assigned to Me", description: "Review the source material and prepare responses to your assigned RFIs.",
-  },
-  manager: {
-    name: "Daniel Brooks", company: contractor, label: "Schedule manager",
-    title: "Schedule & Deadlines", description: "Track company obligations and keep response deadlines current.",
-  },
-  reader: {
-    name: "Taylor Williams", company: contractor, label: "Reader",
-    title: "Project RFI Register", description: "Find project RFIs, verify their status, and reference official responses.",
+    name: "Priya Shah", company: designer, label: "Technical responder",
+    title: "Assigned to Me", description: "Clarify assigned questions and send signed technical responses back to the submitter.",
   },
 };
 
 export const statuses = {
-  draft: "Draft",
-  submitted: "Awaiting check",
-  returned: "Revision requested",
-  assigned: "Assigned",
-  clarification: "Clarification requested",
-  responseReview: "Awaiting response sign-off",
-  answered: "Answered",
+  draft: "Draft", submitted: "Ready for priority review", returned: "Revision requested",
+  assigned: "Awaiting technical response", clarification: "Clarification requested",
+  responseReview: "Awaiting response sign-off", answered: "Awaiting acknowledgment",
+  acknowledged: "Acknowledged",
 };
+export const priorityLabels = { P0: "P0 · High", P1: "P1 · Medium", P2: "P2 · Low" };
 
-export function dateIn(days) {
+export function dateIn(days = 0) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
     .map((part) => String(part).padStart(2, "0")).join("-");
 }
 
-function sample(id, title, status, details) {
+export function makeDraft(id, source = {}) {
   return {
-    id, title, status, originator: "Alex Rivera", originCompany: contractor,
-    responsibleCompany: contractor, assignee: "", location: "Station concourse",
-    reference: "", question: "", requestedBy: "", due: "", response: "",
-    attachments: [], reason: "", recommendation: null, history: [], ...details,
+    id, status: "draft", revision: 1, originator: roles.submitter.name, originCompany: contractor,
+    responsibleCompany: contractor, assignee: "", title: (source.title || "").replace(/\.pdf$/i, ""),
+    question: source.description || "", location: "", reference: "", requestedBy: source.due_date || "",
+    submittedDate: source.rfi_id ? (source.submitted_date || "") : dateIn(), source: source.rfi_id ? "Project RFI library" : "Workspace entry",
+    due: source.due_date || "", response: "", reason: "", attachments: [], files: [],
+    history: [], revisions: [], assessments: [], decisions: [],
   };
 }
 
-export function initialRecords() {
-  return [
-    sample("RFI-024", "Duct route conflicts with structural beam", "submitted", {
-      location: "Concourse · Grid C4", requestedBy: dateIn(3),
-      question: "The proposed supply duct crosses the beam at Grid C4. Can the duct be rerouted below the beam while maintaining ceiling clearance?",
-      recommendation: { priority: "High", reason: "Ceiling coordination is pending and the requested response is due this week.", evidence: "The proposed supply duct crosses the beam at Grid C4." },
-      history: [{ date: dateIn(0), actor: "Alex Rivera", text: "Submitted for check." }],
-    }),
-    sample("RFI-025", "Confirm access panel finish", "submitted", {
-      originator: "Jordan Lee", reference: "A-412", requestedBy: dateIn(1), due: dateIn(1),
-      question: "Confirm whether the access panel finish should match the adjacent ceiling grid.",
-      recommendation: { priority: "Low", reason: "Finish clarification with no recorded installation dependency.", evidence: "Confirm whether the access panel finish should match the adjacent ceiling grid." },
-    }),
-    sample("RFI-026", "Cable tray clearance at crossing", "assigned", {
-      assignee: "Priya Shah", reference: "E-231", due: dateIn(-1), requestedBy: dateIn(-2),
-      location: "Service corridor · Grid D2",
-      question: "Confirm the required clearance between the cable tray and the existing sprinkler branch at Grid D2.",
-    }),
-    sample("RFI-027", "Platform edge detail at expansion joint", "answered", {
-      assignee: "Priya Shah", reference: "S-520", location: "Platform 2 · Joint J3", due: dateIn(2),
-      question: "Which platform edge detail applies at the expansion joint?",
-      response: "Use detail 3 on drawing S-520 at Joint J3. Maintain the indicated movement gap.",
-      responseDate: dateIn(-1),
-    }),
-    sample("RFI-028", "Verify conduit entry location", "draft", {
-      location: "Electrical room", question: "Confirm which wall the feeder conduits should enter.",
-    }),
-    sample("RFI-029", "Confirm equipment access opening", "assigned", {
-      originator: "Jamie Patel", originCompany: designer, reference: "M-330",
-      assignee: "Priya Shah", question: "Confirm the access opening dimensions for replacement of the equipment.",
-    }),
-    sample("RFI-030", "Verify panel mounting elevation", "submitted", {
-      originator: "Jordan Lee", responsibleCompany: designer, reference: "E-301",
-      requestedBy: dateIn(7), question: "Confirm the panel mounting elevation at the north wall.",
-    }),
-  ];
+// Import earlier local work without inventing missing recipients, approvals, or timestamps.
+export function migrateRecords(records) {
+  if (!Array.isArray(records)) throw new Error("Saved RFI records could not be read.");
+  return records.map((record) => ({
+    ...makeDraft(record.id), ...record, revision: record.revision || (record.revisions?.length || 0) + 1,
+    source: record.source || "Earlier demo workspace",
+    submittedDate: record.submittedDate ?? "",
+    assessments: record.assessments || [], decisions: record.decisions || [],
+  }));
 }
 
 export function visibleTo(record, role) {
-  switch (role) {
-    case "submitter": return record.originator === roles.submitter.name;
-    case "checker":
-    case "reader": return record.status !== "draft";
-    case "responder": return record.assignee === roles.responder.name;
-    case "manager":
-      return record.originCompany === contractor || record.responsibleCompany === contractor;
-    default: return false;
-  }
+  if (role === "submitter") return record.originator === roles.submitter.name;
+  return role === "responder" && record.assignee === roles.responder.name;
+}
+
+export function nextOwner(record) {
+  if (record.status === "acknowledged") return "";
+  if (["assigned", "responseReview"].includes(record.status)) return record.assignee;
+  return record.originator;
+}
+
+export function currentDecision(record) {
+  return record.decisions.findLast((entry) => entry.revision === record.revision);
 }
 
 export function allowedActions(record, role) {
-  const actions = [];
-  if (!visibleTo(record, role)) return actions;
-  const editable = ["draft", "returned", "clarification"].includes(record.status);
-  if (role === "submitter" && editable) actions.push("edit", "submit");
-  if (role === "checker" && record.status === "submitted") actions.push("approve", "return");
-  if (role === "responder" && record.status === "responseReview") actions.push("draftResponse", "release");
-  if (role === "responder" && record.status === "assigned") actions.push("draftResponse", "sendResponse", "clarify");
-  if (role === "manager") {
-    if (record.responsibleCompany === contractor && record.status !== "answered" && record.status !== "draft") {
-      actions.push("date");
-    }
-    if (record.originCompany === contractor && !editable) actions.push("revise");
-    if (record.originCompany === contractor && editable) {
-      actions.push("edit");
-      if (record.status !== "draft") actions.push("submit");
-    }
+  if (!visibleTo(record, role)) return [];
+  if (role === "responder") {
+    if (record.status === "assigned") return ["sendResponse", "clarify", "draftResponse"];
+    if (record.status === "responseReview") return ["release", "draftResponse"];
+    return [];
   }
+  const actions = [];
+  if (record.status === "draft" || record.status === "returned") return ["submit", "edit"];
+  if (record.status === "clarification") actions.push("reply");
+  if (["submitted", "assigned", "responseReview", "clarification"].includes(record.status)) actions.push("decide");
+  if (record.status === "submitted" && currentDecision(record)) actions.push("route");
+  if (record.status === "answered") actions.push("acknowledge");
+  if (["submitted", "assigned", "responseReview", "answered", "acknowledged"].includes(record.status)) actions.push("revise");
   return actions;
 }
 
-export function reviseRecord(record, actor, reason) {
-  if (!reason.trim()) throw new Error("Explain why this revision is needed.");
-  const prior = structuredClone(record);
-  delete prior.revisions;
-  record.revisions ??= [];
-  record.revisions.push({ ...prior, date: dateIn(0), actor, revisionReason: reason });
+function log(record, actor, recipient, text, kind, now) {
+  record.history.push({ actor, recipient, text, kind, revision: record.revision, at: now });
+}
+
+export function recordAssessment(record, assessment) {
+  if (assessment.rfiId !== record.id || !Number.isInteger(assessment.revision) ||
+      assessment.revision < 1 || assessment.revision > record.revision) throw new Error("Assessment source does not match this RFI revision.");
+  if (!record.assessments.some((item) => item.id === assessment.id)) record.assessments.push(assessment);
+}
+
+function required(value, label) {
+  const text = String(value ?? "").trim();
+  if (!text) throw new Error(label);
+  return text;
+}
+
+function archiveRevision(record, reason, actor, date) {
+  const snapshot = { ...record };
+  for (const key of ["revisions", "history", "assessments", "decisions"]) delete snapshot[key];
+  record.revisions.push(structuredClone({ ...snapshot, actor, date, revisionReason: reason, decision: currentDecision(record) }));
+  record.revision++;
   record.status = "submitted";
   record.assignee = "";
+  record.responsibleCompany = record.originCompany;
   record.response = "";
   record.responseDate = "";
   record.signoff = null;
+  record.reason = "";
+  record.pendingReply = "";
   record.recommendation = null;
-  record.reason = reason;
+}
+
+// Caller commits only a successful transition. Every new handoff records its addressed payload.
+export function applyAction(record, role, action, values = {}, now = new Date().toISOString()) {
+  if (!allowedActions(record, role).includes(action)) throw new Error("This action is unavailable. Reopen the RFI to see its current owner.");
+  const actor = roles[role].name;
+  const recipient = roles.responder.name;
+  switch (action) {
+    case "edit":
+    case "revise": {
+      const title = required(values.title, "Enter a subject.");
+      const question = required(values.question, "Enter the RFI question.");
+      const reason = action === "revise" ? required(values.revisionReason, "Explain the revision.") : "Edited draft";
+      if (action === "revise") archiveRevision(record, reason, actor, now);
+      Object.assign(record, { title, question, location: values.location || "", reference: values.reference || "",
+        requestedBy: values.requestedBy || "", due: values.requestedBy || "", attachments: values.attachments || [], files: values.files || [] });
+      log(record, actor, actor, reason, action, now);
+      break;
+    }
+    case "submit":
+      required(record.title, "Enter a subject before submitting.");
+      required(record.question, "Enter the question before submitting.");
+      record.status = "submitted";
+      log(record, actor, actor, "Submitted for priority review and routing.", action, now);
+      break;
+    case "decide": {
+      if (!Object.hasOwn(priorityLabels, values.priority)) throw new Error("Choose a priority.");
+      const reason = required(values.reason, "Explain your priority decision.");
+      const assessmentIds = record.assessments.filter((a) => a.revision === record.revision).map((a) => a.id);
+      record.decisions.push({ priority: values.priority, reason, by: actor, at: now, revision: record.revision, assessmentIds });
+      log(record, actor, actor, `Confirmed ${priorityLabels[values.priority]}. ${reason}`, action, now);
+      break;
+    }
+    case "route":
+      record.status = "assigned";
+      record.assignee = recipient;
+      record.responsibleCompany = designer;
+      log(record, actor, recipient, record.pendingReply || record.question, action, now);
+      record.pendingReply = "";
+      break;
+    case "clarify": {
+      const reason = required(values.reason, "Enter a specific clarification question.");
+      record.status = "clarification";
+      record.reason = reason;
+      log(record, actor, record.originator, reason, action, now);
+      break;
+    }
+    case "reply": {
+      const reply = required(values.reply, "Enter the requested information.");
+      const question = record.reason;
+      archiveRevision(record, "Clarification added", actor, now);
+      record.question += `\n\nClarification requested: ${question}\nSubmitter’s clarification: ${reply}`;
+      record.pendingReply = reply;
+      log(record, actor, actor, `Prepared clarification for routing. ${reply}`, action, now);
+      break;
+    }
+    case "draftResponse":
+    case "sendResponse": {
+      const text = required(values.response, "Enter the technical response.");
+      record.response = text;
+      record.status = action === "sendResponse" ? "responseReview" : "assigned";
+      log(record, actor, actor, action === "sendResponse" ? "Prepared response for technical sign-off." : "Saved technical draft.", action, now);
+      break;
+    }
+    case "release": {
+      required(record.response, "Prepare a response before issuing it.");
+      const reviewer = required(values.reviewer, "Identify the reviewer.");
+      const reference = required(values.signoffReference, "Record a sign-off reference or note.");
+      if (values.signoff !== "confirmed") throw new Error("Confirm the technical sign-off before issuing.");
+      record.signoff = { reviewer, reference, issuedBy: actor };
+      record.status = "answered";
+      record.responseDate = now;
+      record.responsibleCompany = record.originCompany;
+      log(record, actor, record.originator, record.response, action, now);
+      break;
+    }
+    case "acknowledge":
+      record.status = "acknowledged";
+      log(record, actor, record.assignee || recipient, "Acknowledged receipt of the issued technical response.", action, now);
+      break;
+  }
+}
+
+export function eligibleForPlan(record) {
+  return Boolean(currentDecision(record)) && !["draft", "acknowledged"].includes(record.status);
+}
+export function byPriority(a, b) {
+  const pa = currentDecision(a)?.priority || "Z";
+  const pb = currentDecision(b)?.priority || "Z";
+  return pa.localeCompare(pb) || (a.due || "9999").localeCompare(b.due || "9999") || a.id.localeCompare(b.id);
 }

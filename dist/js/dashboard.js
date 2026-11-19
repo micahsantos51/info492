@@ -14,6 +14,7 @@ import {
   JEV_PRIORITY_LABELS,
   setJevResult,
 } from "./jev-priority.js?v=20261109-jev1";
+import { describeEvidence, renderAssessmentEvidence } from "./jev-evidence.js";
 import { teamTokenStorage } from "./demo2-auth.js?v=20261109-jev1";
 const $ = (id) => document.getElementById(id);
 const escape = (value) =>
@@ -158,7 +159,7 @@ function jevDetailMarkup(record) {
   const output = result
     ? `<p><span class="jev-badge ${jevCategoryClass(result.category)}">${escape(JEV_PRIORITY_LABELS[result.category])}</span></p><p>Classification confidence: ${(result.confidence * 100).toFixed(0)}%</p>`
     : `<p class="jev-state" role="status" aria-live="polite">${status?.state === "pending" ? "Classifying…" : status?.state === "error" ? `Classification failed: ${escape(status.message)} No category was assigned.` : "Not classified."}</p>`;
-  return `<section class="drawer-section jev-detail"><h3>Jev priority classification</h3>${output}<button id="classify-priority" type="button" ${buttonDisabled ? "disabled" : ""}>${result ? "Already classified" : status?.state === "pending" ? "Classifying…" : "Classify with Jev"}</button><p class="quiet">The contractor priority above remains a separate original submission flag.</p></section>`;
+  return `<section class="drawer-section jev-detail"><h3>Jev priority classification</h3>${output}${result ? renderAssessmentEvidence({ evidence: describeEvidence(evaluationInputForRecord(record)) }) : ""}<button id="classify-priority" type="button" ${buttonDisabled ? "disabled" : ""}>${result ? "Already classified" : status?.state === "pending" ? "Classifying…" : "Classify with Jev"}</button><p class="quiet">The contractor priority above remains a separate original submission flag.</p></section>`;
 }
 function updateJevDetail(record) {
   const content = $("detail-content");

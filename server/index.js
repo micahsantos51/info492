@@ -82,6 +82,10 @@ export async function createServer({
     try {
       if (path === "/api/config" && req.method === "GET")
         return json(200, config());
+      // A site served by a configured Node backend can call it on its own origin.
+      if (req.method === "GET" && jevPriority.configured &&
+          ["/data/jev-config.json", "/info492/data/jev-config.json"].includes(path))
+        return json(200, { backend_origin: "" });
       if (path === "/api/jev/config" && req.method === "GET")
         return json(200, {
           configured: jevPriority.configured,
@@ -120,7 +124,10 @@ export async function createServer({
         }
         try {
           const evaluation = await jevPriority.classify(request.evaluation_input);
-          return json(200, { rfi_id: request.rfi_id, evaluation });
+          return json(200, {
+            rfi_id: request.rfi_id, evaluation,
+            model: jevPriority.model, prompt_version: jevPriority.promptVersion,
+          });
         } catch (error) {
           const status = error instanceof JevPriorityError ? error.status : 502;
           return json(status, { error: error.message || "Jev classification failed." });

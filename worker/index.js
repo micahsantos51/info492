@@ -142,7 +142,10 @@ async function handle(request, env, ctx) {
         );
       try {
         const evaluation = await jev.classify(validated.evaluation_input);
-        return json(200, { rfi_id: validated.rfi_id, evaluation });
+        return json(200, {
+          rfi_id: validated.rfi_id, evaluation,
+          model: jev.model, prompt_version: jev.promptVersion,
+        });
       } catch (error) {
         const status = error instanceof JevPriorityError ? error.status : 502;
         return json(status, { error: error.message || "Jev classification failed." });
