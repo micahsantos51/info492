@@ -27,7 +27,10 @@ async function walk(dir) {
 }
 for (const file of FILES) await copyFile(file);
 for (const dir of DIRS) await walk(dir);
-// The Worker serves both the UI and its API. Pages keeps its separately hosted endpoint.
+// Keep the Pages backend settings in the source tree and the Worker endpoints in its bundle.
+await writeFile(join(root, "dist/data/demo2-config.json"), JSON.stringify({
+  backend_origin: "https://info492-demo2.info492.workers.dev",
+}, null, 2) + "\n");
 await writeFile(join(root, "dist/data/jev-config.json"), JSON.stringify({ backend_origin: "" }, null, 2) + "\n");
 await writeFile(
   join(root, "dist/_headers"),

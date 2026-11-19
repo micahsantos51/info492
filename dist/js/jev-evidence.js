@@ -2,7 +2,7 @@ const evidenceGroups = [
   {
     key: "cost",
     label: "Cost",
-    mention: /\b(costs?|pricing|prices?|budget|financial|overruns?|expenses?|dollars?|USD|CAD)\b|[$€£]\s*\d/i,
+    mention: /\b(costs?|pricing|prices?|budget|financial|surcharges?|charges?|overruns?|expenses?|dollars?|USD|CAD)\b|[$€£]\s*\d/i,
     quantified: /\b(?:USD|CAD)\s*\d[\d,.]*|[$€£]\s*\d[\d,.]*(?:\s*[kmb])?\b|\b\d[\d,.]*(?:\s*(?:USD|dollars?|euros?|pounds?))\b/i,
     quantifiedLabel: "Amount stated",
     mentionedLabel: "Mentioned; no amount detected",
@@ -11,7 +11,7 @@ const evidenceGroups = [
   {
     key: "schedule",
     label: "Schedule",
-    mention: /\b(schedule|delay\w*|reschedul\w*|postpon\w*|slippage|lead[ -]time|deadlines?|milestones?|critical path|time-sensitive|duration|hours?|days?|weeks?|months?|start date|completion date)\b/i,
+    mention: /\b(schedule|delay\w*|reschedul\w*|postpon\w*|slippage|lead[ -]time|deadlines?|milestones?|critical path|time-sensitive|due date|needed[ -]by|respond by|duration|hours?|days?|weeks?|months?|start date|completion date)\b/i,
     quantified: /\b(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)[ -]+(?:(?:calendar|working|business)[ -]+)?(?:hours?|days?|weeks?|months?)\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,?\s+\d{4})?\b/i,
     quantifiedLabel: "Time or date stated",
     mentionedLabel: "Mentioned; no time or date detected",
@@ -53,17 +53,19 @@ function excerpt(line, pattern) {
   return line.slice(start, start + 340).trim();
 }
 
-const costImpact = /\b(?:(?:additional|increased?|extra|added|avoidable)\s+(?:costs?|charges?)|cost\s+(?:impact|increase|overrun|savings)|no\s+(?:additional\s+)?cost(?:\s+impact)?)\b/i;
-const scheduleImpact = /\b(?:delay(?:ed|s)?|postpon(?:e|ed)|on hold|no schedule impact|schedule (?:impact|slippage))\b/i;
+const impactWording = {
+  cost: /\b(?:(?:additional|increased?|extra|added|avoidable)\s+(?:costs?|charges?)|cost\s+(?:impact|increase|overrun|savings)|no\s+(?:additional\s+)?cost|(?:delays?|waiting|standby|rework)\b.{0,36}\b(?:costs?|charges?)|adds?\b.{0,24}\b(?:costs?|charges?))\b/i,
+  schedule: /\b(?:delay(?:ed|s)?|postpon(?:e|ed)|on hold|schedule (?:impact|slippage))\b/i,
+};
+const uncertain = /\?|\b(?:unknown|unclear|unconfirmed|uncertain|unsure|undetermined|TBD|may|might|could|whether|if|to be (?:determined|confirmed)|not yet (?:known|determined|confirmed)|cannot (?:determine|confirm))\b/i;
 
-function impactSummary(key, matching) {
-  if (key === 'cost') return matching.some(line => costImpact.test(line))
-    ? 'Cost impact is discussed. Check whether the effect is estimated, reported, or ruled out.'
-    : 'Cost impact unknown. A purchase price or contract threshold gives context only.';
-  if (key === 'schedule') return matching.some(line => scheduleImpact.test(line))
-    ? 'Schedule impact is discussed. Check whether the effect is estimated, reported, or ruled out.'
+function impactSummary(key, statements, references) {
+  const factor = key === 'cost' ? 'Cost impact' : 'Schedule impact';
+  if (statements.length) return `${factor} is discussed. Check whether the effect is estimated, reported, or ruled out.`;
+  if (references.length) return `${factor} unknown. The description raises an unresolved or conditional effect.`;
+  return key === 'cost'
+    ? 'Cost impact unknown. A purchase price or contract threshold gives context only.'
     : 'Schedule impact unknown. The reply deadline specifies when an answer is requested.';
-  return '';
 }
 
 export function analyzeDescriptionEvidence(description) {
@@ -75,12 +77,15 @@ export function analyzeDescriptionEvidence(description) {
       || (group.key === 'cost' && group.quantified.test(line)));
     const quantified = matches.filter(line => group.quantified?.test(line));
     const status = quantified.length ? 'quantified' : matches.length ? 'mentioned' : 'not_stated';
-    const first = [...new Set([...quantified, ...matches])].slice(0, 2);
+    const impactPattern = impactWording[group.key];
+    const references = impactPattern ? matches.filter(line => impactPattern.test(line)) : [];
+    const statements = references.filter(line => !uncertain.test(line));
+    const first = [...new Set([...statements, ...references, ...quantified, ...matches])].slice(0, 2);
     return {
       key: group.key, label: group.label, status,
       summary: status === 'not_stated' ? group.absentLabel
         : status === 'quantified' ? group.quantifiedLabel : group.mentionedLabel,
-      count: matches.length, impact: impactSummary(group.key, matches),
+      count: matches.length, impact: impactPattern ? impactSummary(group.key, statements, references) : '',
       excerpts: first.map(line => excerpt(line, group.quantified?.test(line) ? group.quantified : group.mention)),
     };
   });

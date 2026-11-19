@@ -16,6 +16,7 @@ export async function createServer({
   env = process.env,
   providerFetch = fetch,
   executionMode = "provider",
+  livePreview = false,
   now = Date.now,
 } = {}) {
   const rubric = await readFile(
@@ -34,6 +35,7 @@ export async function createServer({
   )
     .split(",")
     .map((s) => s.trim());
+  if (livePreview) origins.push("http://127.0.0.1:8787", "http://localhost:8787");
   // Render supplies the service's own HTTPS origin. Keep the Pages origin
   // explicitly allowlisted while allowing the same app served by the backend.
   if (env.RENDER_EXTERNAL_URL) {
@@ -82,6 +84,8 @@ export async function createServer({
     try {
       if (path === "/api/config" && req.method === "GET")
         return json(200, config());
+      if (req.method === "GET" && livePreview && /^\/(?:info492\/)?data\/(?:demo2|jev)-config\.json$/.test(path))
+        return json(200, { backend_origin: "https://info492-demo2.info492.workers.dev" });
       // A site served by a configured Node backend can call it on its own origin.
       if (req.method === "GET" && jevPriority.configured &&
           ["/data/jev-config.json", "/info492/data/jev-config.json"].includes(path))
@@ -317,13 +321,12 @@ export async function createServer({
   return server;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const server = await createServer();
-  server.listen(
-    Number(process.env.PORT || 4922),
-    process.env.HOST || "127.0.0.1",
-    () =>
-      console.log(
-        `Demo 2 server listening on port ${process.env.PORT || 4922}. Provider configuration is reported by /api/config; no request bodies are logged.`,
-      ),
-  );
+  const livePreview = process.argv.includes("--live-preview");
+  const server = await createServer({ livePreview });
+  const host = livePreview ? "127.0.0.1" : process.env.HOST || "127.0.0.1";
+  const port = livePreview ? 8787 : Number(process.env.PORT || 4922);
+  server.listen(port, host, () => {
+    console.log(livePreview ? `Demo 4 live preview: http://${host}:${port}/signin.html`
+      : `Demo 2 server listening on port ${port}. Provider configuration is reported by /api/config; no request bodies are logged.`);
+  });
 }

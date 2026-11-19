@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { allowedActions, applyAction, byPriority, currentDecision, eligibleForPlan, makeDraft, migrateRecords,
-  nextOwner, recordAssessment, roles, visibleTo } from "../js/workspace-data.js";
+import { actionSnapshotMatches, allowedActions, applyAction, byPriority, currentDecision, eligibleForPlan, makeDraft, migrateRecords,
+  neededBy, nextOwner, priorityReview, responseVisibility, recordAssessment, roles, visibleTo } from "../js/workspace-data.js";
 
 const source = {
   rfi_id: "R200-123", title: "Coordination question.pdf", submitted_date: "2022-04-01", due_date: "2022-04-16",
@@ -128,4 +128,71 @@ test("daily order uses confirmed priority and needed-by tie-break; a manual move
   const sorted = [r1,r2,r3,draft].filter(eligibleForPlan).sort(byPriority);
   assert.deepEqual(sorted.map(r=>r.id),["C","A","B"]);
   sorted.unshift(sorted.pop()); assert.equal(currentDecision(sorted[0]).priority,"P1");
+});
+
+test("a new draft records its submission date on send; imported missing dates remain unknown", () => {
+  const r = makeDraft("RFI-001");
+  applyAction(r,"submitter","edit",{title:"Explicit date",question:"Ready to submit?"});
+  assert.equal(r.submittedDate,"");
+  const at = new Date(2026,10,20,12);
+  applyAction(r,"submitter","submit",{},at.toISOString());
+  assert.equal(r.submittedDate,"2026-11-20");
+  const imported = makeDraft("R-1",{rfi_id:"R-1",title:"Source",description:"Old question."});
+  applyAction(imported,"submitter","submit",{},at.toISOString());
+  assert.equal(imported.submittedDate,"");
+});
+
+test("a waiting JEV result cannot invalidate the technical reply or be attributed to a prior human review", () => {
+  const r = assigned();
+  const before = assessment(r,"first","P1");
+  recordAssessment(r,before);
+  const opened = structuredClone(r);
+  recordAssessment(r,assessment(r,"late","P0"));
+  assert.equal(actionSnapshotMatches(opened,r,"decide"),true);
+  applyAction(r,"submitter","decide",{priority:"P2",reason:"Access maintained",reviewedAssessmentIds:[before.id]});
+  assert.deepEqual(currentDecision(r).assessmentIds,["first"]);
+  assert.deepEqual(priorityReview(r).newProposals.map(a => a.id),["late"]);
+  assert.equal(actionSnapshotMatches(opened,r,"sendResponse"),true);
+  assert.equal(actionSnapshotMatches(opened,r,"decide"),false);
+  assert.throws(() => applyAction(r,"submitter","decide",{priority:"P1",reason:"Review",reviewedAssessmentIds:["another-revision"]}));
+  applyAction(r,"responder","draftResponse",{response:"A private technical draft."});
+  assert.equal(actionSnapshotMatches(opened,r,"sendResponse"),false);
+  const draft = structuredClone(r);
+  applyAction(r,"submitter","revise",{title:r.title,question:r.question,revisionReason:"Changed work area"});
+  assert.equal(actionSnapshotMatches(draft,r,"sendResponse"),false);
+});
+
+test("issued responses and private drafts retain their visibility in revision history", () => {
+  const r = assigned();
+  applyAction(r,"responder","sendResponse",{response:"Unreleased wording"});
+  applyAction(r,"submitter","revise",{title:r.title,question:r.question,revisionReason:"Change before sign-off"});
+  assert.equal(responseVisibility(r.revisions[0],"submitter"),"");
+  assert.equal(responseVisibility(r.revisions[0],"responder"),"draft");
+  decide(r); route(r);
+  applyAction(r,"responder","sendResponse",{response:"Issued wording"});
+  applyAction(r,"responder","release",{reviewer:"Sam",signoffReference:"Review #1",signoff:"confirmed"});
+  applyAction(r,"submitter","revise",{title:r.title,question:r.question,revisionReason:"New field detail"});
+  assert.equal(r.revisions[1].response,"Issued wording");
+  for (const role of Object.keys(roles)) assert.equal(responseVisibility(r.revisions[1],role),"issued");
+});
+
+test("legacy requested-by keeps deadlines consistent across ranking and display", () => {
+  const [r] = migrateRecords([{id:"L",status:"submitted",due:"",requestedBy:"2025-07-01"}]);
+  const other = {...r,id:"B",due:"2025-08-01"};
+  assert.equal(neededBy(r),"2025-07-01");
+  assert.deepEqual([other,r].sort(byPriority).map(record => record.id),["L","B"]);
+  assert.equal(neededBy({...r,due:"2025-06-01"}),"2025-06-01");
+});
+
+test("repeat simulated assessments per revision are idempotent and missing information counts as a differing outcome", () => {
+  const r = assigned();
+  const a = {...assessment(r,"A","P0"),simulated:true,source:"Scenario A"};
+  recordAssessment(r,a);recordAssessment(r,{...a,id:"duplicate"});
+  recordAssessment(r,{...a,id:"B",priority:null,source:"Scenario B"});
+  assert.equal(r.assessments.length,2);
+  assert.equal(priorityReview(r).disagreement,true);
+  decide(r);
+  assert.deepEqual(priorityReview(r).newProposals,[]);
+  recordAssessment(r,{...assessment(r,"L","P2"),source:"Live JEV",simulated:false});
+  assert.deepEqual(priorityReview(r).newProposals.map(a=>a.id),["L"]);
 });

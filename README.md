@@ -162,21 +162,21 @@ Development mode now displays provisional working P0/P1/P2 for incomplete cases,
 
 ## Demo 3 — Daily RFI To-Do and Jev intake
 
-Open [Daily To-Do](demo3.html), select a CSV or JSON file up to 256 KB with 1–50 RFI records, and choose **Evaluate with Jev**. No visitor account, API key, or connection setup is required. The site operator must provide `JEV_API_KEY` privately to the hosted backend once; it is never included in frontend files. Results enter the daily review board, where users can build a plan, reorder, snooze and review tasks. Demo 2 runs can still be synced into Demo 3.
+Open [Daily To-Do](demo3.html) and select from the 14 bundled project RFIs, or import a CSV or JSON file with 1–50 records up to 1,000,000 bytes. Choose **Add selected to review**, enable **Allow Jev to review**, then choose **Classify RFIs**. Choose **Generate plan** to fill today’s list. You can reorder tasks, snooze an item, or record a review outcome.
 
-- [Workflow, limitations and validation](docs/DEMO3.md)
-- [Page](demo3.html) · [Styles](css/demo3.css) · [UI](js/demo3.js) · [Shared handoff / board logic](js/demo3-core.js) · [Tests](tests/demo3-core.test.js)
-- Uses the current Demo 2 backend and data contract, with no new runtime package dependencies.
-- The review board is local to the browser; there are no authenticated roles, team sync or automatic source-RFI updates. Jev intake supports CSV and JSON (not PDF/Word extraction). Illustrative examples are labeled and do not call the model. See [Demo 3 workflow and setup limits](docs/DEMO3.md).
+Demo 3 has its own intake and browser-local board. Demo 2 results do not automatically transfer. Jev receives the submitted date, needed-by date and description through the public classification endpoint. The operator configures the server-side key. An existing successful assessment is reused for identical inputs. Change the **Needed by** date in **Review** to enable **Classify again**.
+
+- [Workflow, local preview and evidence display](docs/DEMO3.md)
+- [Page](demo3.html) · [Board UI](js/demo3.js) · [Planning rules](js/demo3-core.js) · [Description evidence](js/jev-evidence.js) · [Tests](tests/demo3-core.test.js)
 
 
 ## Demo 4 — RFI Exchange
 
 [Choose a participant](signin.html) to follow one project RFI between the GC submitter and the technical responder. The GC confirms the review priority and routes the question. The responder can request clarification or issue a signed response. The submitter records receipt. Both roles can trace the exchange on the same RFI and revision in the same browser profile. [Rehearsal and stakeholder test](docs/role-workspaces.md)
 
-For local live assessments, start the Node backend with a server-side `JEV_API_KEY` and open its `signin.html`. A configured Node server and the Worker build use their own origin for JEV. The static Pages site uses its published connection settings. The labeled simulated conflict exercise works without a provider key.
+For a local Demo 3 or 4 using the team’s hosted JEV, run `npm run preview:live` and open [the local exchange](http://127.0.0.1:8787/signin.html). The browser calls the team’s Worker directly from its configured development origin. Each port has separate browser storage. To test changes to your own backend prompt, start the Node backend with a server-side `JEV_API_KEY` and open its `signin.html`. A configured Node server and the Worker build use their own origin for JEV. The static Pages site uses its published connection settings. The labeled simulated conflict exercise works without a provider key.
 
-**Calibrating JEV with reviewed cases.** In the GC workspace, choose **Export review decisions**. Each decision retains the proposals seen at the time, their input snapshot, the human priority and the reason. Inspect disagreements on development RFIs, edit the team's shared [JEV prompt and rubric](js/jev-priority.js), then rerun held-out RFIs. Reserve whole RFI IDs for the held-out set so different revisions of the same question do not appear on both sides. Reordering a daily plan has no effect on these labels.
+**Calibrating JEV with reviewed cases.** In the GC workspace, choose **Export review decisions**. Each decision includes the reviewer, the human priority and reason, the question and dates for that revision, and any proposals the reviewer saw. Earlier records with missing source information retain an empty value. Inspect disagreements on development RFIs, edit the team's shared [JEV prompt and rubric](js/jev-priority.js), then rerun held-out RFIs. Reserve whole RFI IDs for the held-out set so different revisions of the same question do not appear on both sides. Reordering a daily plan has no effect on these labels.
 
 Score a decisions export locally against a separately prepared CSV with columns `rfi_id,revision,final_label`. Labels can be High, Medium, Low or lacking_info. For example, if your files are in the Git-ignored `.private` directory, run:
 
@@ -184,4 +184,4 @@ Score a decisions export locally against a separately prepared CSV with columns 
 node scripts/score-jev.js .private/decisions.json .private/reference.csv
 ```
 
-The report compares the first recorded live proposal per case for each model and prompt version. It gives the matching count, missing predictions, and each disagreement. The denominator includes every independently labeled case. Simulated recommendations are excluded. An older backend may leave the model and prompt version unknown. Review corrections with the team before using them to adjust the rubric. The application does not train JEV when a user clicks a priority.
+The report compares the first recorded live proposal per case for each model and prompt version. It gives the matching count, missing predictions, and each disagreement. The denominator includes every independently labeled case. Simulated recommendations are excluded. For comparisons between prompt versions use runs with `versionReported: true`. Older services can omit the model or prompt fingerprint. Review corrections with the team before using them to adjust the rubric. The application does not train JEV when a user clicks a priority.

@@ -56,7 +56,8 @@ export function scoreJev(report, key) {
           disagreements.push({ rfiId, revision, expected: target, predicted });
         }
       }
-      return { model, promptVersion, evaluated: cases.size, missing: expected.size - cases.size,
+      return { model, promptVersion, versionReported: Boolean(model && promptVersion),
+        evaluated: cases.size, missing: expected.size - cases.size,
         matches, accuracyOverKey: matches / expected.size, disagreements };
     }),
   };
@@ -70,6 +71,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const result = scoreJev(JSON.parse(report), parseCSV(csv.replace(/^\uFEFF/, '')));
     console.log(JSON.stringify(result, null, 2));
     if (!result.runs.length) console.error('No live Jev proposals match the specified RFI IDs and revisions.');
+    if (result.runs.some(run => !run.versionReported))
+      console.error('The service omitted model or prompt metadata for some proposals. Exclude those results from prompt-version comparisons.');
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

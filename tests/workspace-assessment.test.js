@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { describeEvidence } from '../js/jev-evidence.js';
 import { assessWorkspaceRfi, readJevEnvelope, renderSourceEvidence, simulatedWorkspaceAssessments } from '../js/workspace-assessment.js';
-import { applyJevClassification, due, emptyBoard, jevInputForBoardItem, mergeRfiRecords, rankable, refreshClassificationState } from '../js/demo3-core.js';
+import { applyJevClassification, due, emptyBoard, jevInputForBoardItem, mergeRfiRecords, rankable, recordClassificationError, refreshClassificationState } from '../js/demo3-core.js';
 
 const input = {
   id: 'R-1', revision: 3, question: 'See drawing dated 2022-03-01. The waiver threshold is $150,000.00. The valve price is $4,530.15.',
@@ -77,4 +77,42 @@ test('board reclassification follows changed inputs and leaves old snapshots int
   refreshClassificationState(item);
   assert.equal(rankable(item), true);
   assert.equal(item.result.priority, 'P0');
+});
+
+test('open cost questions and possible delays remain unknown; print direct supporting statements first', () => {
+  const uncertain = describeEvidence({due_date: '2026-11-19',
+    description: 'The waiver is $150,000.00. Is there an additional cost? The pour may be delayed.'});
+  assert.match(uncertain.factors[0].impact, /cost impact unknown/i);
+  assert.match(uncertain.factors[1].impact, /schedule impact unknown/i);
+  const [cost] = describeEvidence({description:
+    'The material costs $1,200. The waiver threshold is $150,000. The delay costs $500 per day in standby charges.'}).factors;
+  assert.equal(cost.count, 3);
+  assert.equal(cost.excerpts[0], 'The delay costs $500 per day in standby charges.');
+  assert.match(cost.impact, /is discussed/);
+});
+
+test('failed retrial preserves the previous assessment and restores the matching result when inputs revert', () => {
+  const board = emptyBoard();
+  mergeRfiRecords(board, [{rfi_id:input.id, description:input.question, due_date:input.due}]);
+  const item = board.items[0];
+  const original = JSON.stringify(jevInputForBoardItem(item));
+  applyJevClassification(item, {category:'mid', confidence:0.8}, original);
+  const explanation = item.result.priority_reason;
+  item.due_override = '2022-04-11';
+  const changed = JSON.stringify(jevInputForBoardItem(item));
+  recordClassificationError(item, changed, 'Temporary outage');
+  assert.equal(item.classification_state, 'error');
+  assert.equal(item.result.priority_reason, explanation);
+  assert.equal(rankable(item), false);
+  item.due_override = '';
+  refreshClassificationState(item);
+  assert.equal(item.classification_state, 'classified');
+  assert.equal(rankable(item), true);
+  assert.equal(item.classification_input, original);
+  item.due_override = '2022-04-11';
+  refreshClassificationState(item);
+  assert.equal(item.classification_state, 'error');
+  applyJevClassification(item, {category:'high', confidence:0.9}, changed);
+  assert.equal(item.classification_error, null);
+  assert.equal(rankable(item), true);
 });

@@ -9,7 +9,7 @@
     <title>RFI Review · INFO 492 Team 1</title>
     <link rel="stylesheet" href="css/demo3.css?v=20261118-jev-description">
     <link rel="stylesheet" href="css/rfi-evidence.css">
-    <script type="module" src="js/demo3.js?v=20261118-revision-evidence"></script>
+    <script type="module" src="js/demo3.js?v=20261118-evaluation-retry"></script>
 </head>
 
 <body><a class="skip" href="#board">Skip to board</a>
@@ -77,7 +77,7 @@
                 <p id="plan-preview" class="small"></p>
             </div><button class="primary" id="generate">Generate plan</button>
         </section>
-        <p id="notice" role="status" aria-live="polite">Loading your review workspace…</p>
+        <p id="notice" role="status" aria-live="polite"></p>
         <div id="board" class="board" tabindex="-1">
             <section class="column suggestions">
                 <div class="column-head">
@@ -123,7 +123,7 @@
                 <h2 id="detail-title">Review RFI</h2><button type="button" id="close-detail"
                     aria-label="Close review">✕</button>
             </div>
-            <div id="detail-body"></div><button type="button" class="primary" id="classify-one">Classify with
+            <div id="detail-body"></div><button type="button" class="primary" id="classify-one" aria-describedby="classification-hint">Classify with
                 Jev</button>
             <div class="fields"><label>Needed by<input type="date" id="due"></label><label>Owner<input id="owner"
                         maxlength="100" placeholder="Name"></label></div><button type="button"

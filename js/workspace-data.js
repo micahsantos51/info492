@@ -32,7 +32,7 @@ export function makeDraft(id, source = {}) {
     id, status: "draft", revision: 1, originator: roles.submitter.name, originCompany: contractor,
     responsibleCompany: contractor, assignee: "", title: (source.title || "").replace(/\.pdf$/i, ""),
     question: source.description || "", location: "", reference: "", requestedBy: source.due_date || "",
-    submittedDate: source.rfi_id ? (source.submitted_date || "") : dateIn(), source: source.rfi_id ? "Project RFI library" : "Workspace entry",
+    submittedDate: source.submitted_date || "", source: source.rfi_id ? "Project RFI library" : "Workspace entry",
     due: source.due_date || "", response: "", reason: "", attachments: [], files: [],
     history: [], revisions: [], assessments: [], decisions: [],
   };
@@ -64,6 +64,41 @@ export function currentDecision(record) {
   return record.decisions.findLast((entry) => entry.revision === record.revision);
 }
 
+export function neededBy(record) {
+  return record.due || record.requestedBy || "";
+}
+
+export function responseVisibility(record, role) {
+  if (!record.response) return "";
+  if (["answered", "acknowledged"].includes(record.status)) return "issued";
+  return role === "responder" && record.assignee === roles.responder.name ? "draft" : "";
+}
+
+export function priorityReview(record) {
+  const proposals = record.assessments.filter(a => a.revision === record.revision);
+  const decision = currentDecision(record);
+  const outcomes = new Set(proposals.map(a => a.priority ?? "Needs information"));
+  const newProposals = decision ? proposals.filter(a => !decision.assessmentIds?.includes(a.id)) : [];
+  return { proposals, decision, disagreement: outcomes.size > 1, newProposals };
+}
+
+// An advisory result may arrive while a person is composing an answer or confirming a priority.
+// Only changes relevant to that action should invalidate the form.
+export function actionSnapshotMatches(opened, current, action) {
+  if (!opened || !current || opened.id !== current.id || opened.revision !== current.revision) return false;
+  const technical = ["clarify", "draftResponse", "sendResponse", "release"].includes(action);
+  function comparable(record) {
+    const copy = { ...record };
+    delete copy.assessments;
+    if (technical) {
+      delete copy.decisions;
+      copy.history = copy.history.filter(h => h.kind !== "decide");
+    }
+    return JSON.stringify(copy);
+  }
+  return comparable(opened) === comparable(current);
+}
+
 export function allowedActions(record, role) {
   if (!visibleTo(record, role)) return [];
   if (role === "responder") {
@@ -88,7 +123,9 @@ function log(record, actor, recipient, text, kind, now) {
 export function recordAssessment(record, assessment) {
   if (assessment.rfiId !== record.id || !Number.isInteger(assessment.revision) ||
       assessment.revision < 1 || assessment.revision > record.revision) throw new Error("Assessment source does not match this RFI revision.");
-  if (!record.assessments.some((item) => item.id === assessment.id)) record.assessments.push(assessment);
+  const duplicate = record.assessments.some(item => item.id === assessment.id ||
+    (item.simulated && assessment.simulated && item.revision === assessment.revision && item.source === assessment.source));
+  if (!duplicate) record.assessments.push(assessment);
 }
 
 function required(value, label) {
@@ -133,13 +170,22 @@ export function applyAction(record, role, action, values = {}, now = new Date().
     case "submit":
       required(record.title, "Enter a subject before submitting.");
       required(record.question, "Enter the question before submitting.");
+      if (record.status === "draft" && record.source === "Workspace entry") {
+        const date = new Date(now);
+        record.submittedDate = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+          .map(part => String(part).padStart(2,"0")).join("-");
+      }
       record.status = "submitted";
       log(record, actor, actor, "Submitted for priority review and routing.", action, now);
       break;
     case "decide": {
       if (!Object.hasOwn(priorityLabels, values.priority)) throw new Error("Choose a priority.");
       const reason = required(values.reason, "Explain your priority decision.");
-      const assessmentIds = record.assessments.filter((a) => a.revision === record.revision).map((a) => a.id);
+      const available = record.assessments.filter(a => a.revision === record.revision).map(a => a.id);
+      const assessmentIds = values.reviewedAssessmentIds ?? available;
+      if (!Array.isArray(assessmentIds) || assessmentIds.some(id => !available.includes(id))) {
+        throw new Error("The reviewed assessments no longer match this revision.");
+      }
       record.decisions.push({ priority: values.priority, reason, by: actor, at: now, revision: record.revision, assessmentIds });
       log(record, actor, actor, `Confirmed ${priorityLabels[values.priority]}. ${reason}`, action, now);
       break;
@@ -200,5 +246,5 @@ export function eligibleForPlan(record) {
 export function byPriority(a, b) {
   const pa = currentDecision(a)?.priority || "Z";
   const pb = currentDecision(b)?.priority || "Z";
-  return pa.localeCompare(pb) || (a.due || "9999").localeCompare(b.due || "9999") || a.id.localeCompare(b.id);
+  return pa.localeCompare(pb) || (neededBy(a) || "9999").localeCompare(neededBy(b) || "9999") || a.id.localeCompare(b.id);
 }

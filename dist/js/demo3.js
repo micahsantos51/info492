@@ -1,7 +1,7 @@
-import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard, jevInputForBoardItem, refreshClassificationState } from './demo3-core.js?v=20261118-source-evidence';
+import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard, jevInputForBoardItem, refreshClassificationState, recordClassificationError } from './demo3-core.js?v=20261118-evaluation-retry';
 import { JEV_PRIORITY_LABELS } from './jev-priority.js?v=20261109-sharepoint';
-import { describeEvidence, renderAssessmentEvidence } from './jev-evidence.js';
-import { requestJevEvaluation } from './workspace-assessment.js';
+import { describeEvidence, renderAssessmentEvidence } from './jev-evidence.js?v=20261118-handoffs';
+import { requestJevEvaluation } from './workspace-assessment.js?v=20261118-handoffs';
 import { parseCSV } from './rfi-data.js?v=20261110-rfi-upload';
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -63,7 +63,18 @@ $('confirm-reset').onclick = () => {
   $('undo').focus();
 };
 $('restore').onclick = () => mutate(() => { const items = scope().filter(x => x.status === 'planned'), sorted = recommend(items.map(x => ({ ...x, status: 'suggested' })), day()), keys = sorted.map(x => x.key); for (const x of items) { x.order = keys.includes(x.key) ? keys.indexOf(x.key) : keys.length + x.order; x.manual = false; } board.audit.push({ at: new Date().toISOString(), action: 'restore-order', project: board.project }); });
-function updateClassifyButton() { const item = board.items.find(x => x.key === active); if (!item) return; const currentInput = JSON.stringify(jevInputForBoardItem(item, $('due').value)); const unchangedClassification = item.classification && item.classification_input === currentInput; $('classify-one').disabled = item.classification_state === 'pending' || Boolean(unchangedClassification); }
+function updateClassifyButton() {
+  const item = board.items.find(entry => entry.key === active);
+  if (!item) return;
+  const input = JSON.stringify(jevInputForBoardItem(item, $('due').value));
+  const unchanged = Boolean(item.classification && input === item.classification_input);
+  const pending = item.classification_state === 'pending';
+  $('classify-one').disabled = pending || unchanged;
+  const hint = $('classification-hint');
+  if (hint) hint.textContent = pending ? 'Jev is reviewing this RFI.'
+    : unchanged ? 'These dates and this description have already been classified. Change the needed-by date to request another assessment.'
+    : '';
+}
 function saveReviewDueDate(item, date) {
   if (item.due_override === date) return true;
   const previous = structuredClone(board), previousUndo = undo;
@@ -78,16 +89,20 @@ function saveReviewDueDate(item, date) {
 function setConnectionStatus(message) { const status = $('jev-connection-status'); if (status) status.textContent = message; }
 async function checkConnection() { setConnectionStatus('Connecting to Jev… The first check can take about a minute after the service has been idle.'); try { const response = await fetch(`${backendOrigin}/api/jev/config`, { cache: 'no-store', signal: AbortSignal.timeout(75000) }); let config; try { config = await response.json(); } catch { throw Error(`Backend returned HTTP ${response.status} without Jev configuration metadata.`); } if (!response.ok) throw Error(config.error || `Backend error (HTTP ${response.status}).`); if (config.token_required) throw Error('The deployed backend still requires a team token. Deploy the current server version.'); configured = config.configured === true && !config.token_required; setConnectionStatus(configured ? 'Ready · no visitor key or backend settings needed.' : 'Jev is not configured on the backend. The site owner must add the server-side Jev key.'); } catch (error) { configured = false; const reason = error instanceof TypeError ? 'The browser could not reach the backend (network or CORS).' : error.message; setConnectionStatus(`Jev unavailable: ${reason} The backend ALLOWED_ORIGINS must include ${location.origin}; confirm the current server is deployed and awake.`); } }
 async function initializeConnection() { try { const response = await fetch('data/jev-config.json', { cache: 'no-store' }); if (!response.ok) throw Error(`Could not load the Jev backend address (HTTP ${response.status}).`); const config = await response.json(); backendOrigin = config.backend_origin ? new URL(config.backend_origin).origin : location.origin; } catch (error) { backendOrigin = location.origin; setConnectionStatus(`Jev setup unavailable: ${error.message}`); } await checkConnection(); }
+function reportClassificationProblem(key, message) {
+  say(message);
+  if (active === key && $('detail').open) $('form-error').textContent = message;
+}
 async function classifyItem(key) {
   const item = board.items.find(x => x.key === key);
   if (!item || item.classification_state === 'pending') return false;
   if (!$('jev-consent').checked) {
-    say('Allow Jev to review the imported RFI first.');
-    $('jev-consent').focus();
+    reportClassificationProblem(key, 'Enable “Allow Jev to review” above the RFI list, then classify this RFI.');
+    if (!$('detail').open) $('jev-consent').focus();
     return false;
   }
   if (!configured) await checkConnection();
-  if (!configured) { say('Jev is not available.'); return false; }
+  if (!configured) { reportClassificationProblem(key, 'Jev is unavailable. Check the connection and try again.'); return false; }
   if (!board.items.includes(item) || item.classification_state === 'pending' || !$('jev-consent').checked) return false;
 
   const requestInput = jevInputForBoardItem(item);
@@ -96,6 +111,7 @@ async function classifyItem(key) {
     refreshClassificationState(item);
     return true;
   }
+  if (active === key && $('detail').open) $('form-error').textContent = '';
   item.classification_state = 'pending';
   render();
   updateClassifyButton();
@@ -112,13 +128,18 @@ async function classifyItem(key) {
       : `${item.record.rfi_id} classified: ${JEV_PRIORITY_LABELS[evaluation.category]} · ${Math.round(evaluation.confidence * 100)}% confidence.`);
     return true;
   } catch (error) {
-    item.classification_state = 'error';
-    item.result.priority_reason = `Classification failed: ${error.message}`;
+    if (!board.items.includes(item)) return false;
+    recordClassificationError(item, keyForInput, error.message);
+    save();
     say(`${item.record.rfi_id}: ${error.message}`);
     return false;
   } finally {
     render();
-    if (active === key && $('detail').open) openDetail(key);
+    if (active === key && $('detail').open && board.items.includes(item)) {
+      renderDetailAssessment(item);
+      $('classify-one').textContent = item.classification ? 'Classify again' : 'Classify with Jev';
+      updateClassifyButton();
+    }
   }
 }
 $('classify-all').onclick = async () => { const pending = board.items.filter(needsClassification).slice(0, 50); if (!$('jev-consent').checked) return say('Allow Jev to review the selected RFIs first.'); batchRunning = true; render(); try { for (let i = 0; i < pending.length; i++) { say(`Classifying ${pending[i].record.rfi_id} (${i + 1} of ${pending.length})…`); if (!await classifyItem(pending[i].key)) break; } } finally { batchRunning = false; render(); } };
@@ -138,10 +159,12 @@ function renderDetailAssessment(item) {
   const effectiveDate = due(item);
   $('detail-body').innerHTML = `<div class="flags">${badges(item)}</div>
     <p><strong>Needed by:</strong> ${esc(effectiveDate || 'Not provided')} · <strong>Submitted:</strong> ${esc(item.record.submitted_date || 'Not provided')}</p>
+    ${item.classification_state === 'error' ? `<p class="warning" role="alert">Classification failed: ${esc(item.classification_error?.message)}. You can retry this RFI.</p>` : ''}
     <p><strong>Priority:</strong> ${esc(item.result.priority_reason || 'Not classified yet.')}</p>
     <p><strong>Description</strong></p><blockquote>${esc(item.record.description)}</blockquote>
     ${detailEvidence(item)}
-    <p><strong>Next step:</strong> ${esc(item.result.suggested_gc_review_action)}</p>`;
+    <p><strong>Next step:</strong> ${esc(item.result.suggested_gc_review_action)}</p>
+    <p class="small" id="classification-hint" aria-live="polite"></p>`;
 }
 function openDetail(key) {
   active = key;

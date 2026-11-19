@@ -1,7 +1,7 @@
 import { readFiles, fileUrl } from "./workspace-files.js";
-import { allowedActions, applyAction, byPriority, currentDecision, dateIn, eligibleForPlan, makeDraft, migrateRecords, nextOwner, priorityLabels, project, recordAssessment, roles, statuses, visibleTo } from "./workspace-data.js";
-import { assessWorkspaceRfi, simulatedWorkspaceAssessments, renderAssessmentEvidence, renderSourceEvidence } from "./workspace-assessment.js";
-import { downloadReviewDecisions } from "./review-feedback.js";
+import { actionSnapshotMatches, allowedActions, applyAction, byPriority, currentDecision, dateIn, eligibleForPlan, makeDraft, migrateRecords, neededBy, nextOwner, priorityLabels, priorityReview, project, recordAssessment, responseVisibility, roles, statuses, visibleTo } from "./workspace-data.js?v=20261118-handoffs";
+import { assessWorkspaceRfi, simulatedWorkspaceAssessments, renderAssessmentEvidence, renderSourceEvidence } from "./workspace-assessment.js?v=20261118-handoffs";
+import { downloadReviewDecisions } from "./review-feedback.js?v=20261118-handoffs";
 
 const sessionKey = "info492-role-session";
 const recordsKey = "info492-role-workspace.records.v2";
@@ -34,7 +34,7 @@ const listFilters = [
   ["All my RFIs", () => true],
 ];
 let role, records = [], plan = [], sourceRecords = [], sourceStatus = "Loading project RFIs…";
-let selected = "", mode = "", openedRecord = "", tab = 0, query = "", timing = "all";
+let selected = "", mode = "", openedRecord = null, tab = 0, query = "", timing = "all";
 let fileUrls = [], saving = false, noticeTimer;
 const requests = new Set();
 const planEntry = (r) => r.id + "@" + r.revision;
@@ -74,9 +74,12 @@ async function start() {
   $("account").hidden = false;
   $("identity").textContent = roles[role].name + " · " + roles[role].label;
   $("switch-role").textContent = role === "submitter" ? "Switch to responder" : "Switch to submitter";
-  $("switch-role").onclick = () => {
+  $("switch-role").onclick = async () => {
     sessionStorage.setItem(sessionKey, JSON.stringify({ role: role === "submitter" ? "responder" : "submitter" }));
-    location.reload();
+    tab = 0; query = ""; timing = "all";
+    if (dialog.open) dialog.close();
+    await start();
+    $("role-title").focus();
   };
   $("sign-out").onclick = () => { sessionStorage.removeItem(sessionKey); location.assign("index.html"); };
   document.title = roles[role].title + " · Demo 4";
@@ -126,15 +129,16 @@ function render() {
 
 function renderList() {
   const matches = scoped().filter(r => {
-    const onDate = timing === "all" || (timing === "missing" ? !r.due : r.due &&
-      (timing === "overdue" ? r.due < dateIn() : r.due >= dateIn() && r.due <= dateIn(7)));
+    const date = neededBy(r);
+    const onDate = timing === "all" || (timing === "missing" ? !date : date &&
+      (timing === "overdue" ? date < dateIn() : date >= dateIn() && date <= dateIn(7)));
     return onDate && listFilters[tab][1](r) && [r.id, r.title, r.reference, r.location].join(" ").toLowerCase().includes(query.trim().toLowerCase());
   }).sort(byPriority);
   const list = $("rfi-list");
   list.innerHTML = matches.length ? `<div class="workspace-table-scroll" tabindex="0"><table class="workspace-table">
     <thead><tr><th>RFI / Subject</th><th>Next action</th><th>Next owner</th><th>Needed by</th><th>Confirmed priority</th></tr></thead>
     <tbody>${matches.map(r => `<tr><td>${recordButton(r)}</td><td>${escape(nextAction(r))}</td><td>${escape(nextOwner(r) || "Complete")}</td>
-      <td>${escape(r.due || "Unknown")}</td><td>${escape(currentPriority(r))}</td></tr>`).join("")}</tbody></table></div>`
+      <td>${escape(neededBy(r) || "Unknown")}</td><td>${escape(currentPriority(r))}</td></tr>`).join("")}</tbody></table></div>`
     : `<p class="workspace-empty">${role === "responder" && !scoped().length ? "Your inbox is empty. RFIs appear here when the submitter routes them to you." : "No RFIs match this view."}</p>`;
 }
 
@@ -146,7 +150,7 @@ function dailyPlan(all) {
   const pending = all.filter(eligibleForPlan).sort(byPriority);
   const planned = plan.map(key => pending.find(r => planEntry(r) === key)).filter(Boolean);
   const suggestions = pending.filter(r => !plan.includes(planEntry(r)));
-  const row = (r, controls) => `<div class="workspace-task"><div>${recordButton(r)}<small>${escape(currentPriority(r))} · Needed by ${escape(r.due || "unknown")}</small></div>${controls}</div>`;
+  const row = (r, controls) => `<div class="workspace-task"><div>${recordButton(r)}<small>${escape(currentPriority(r))} · Needed by ${escape(neededBy(r) || "unknown")}</small></div>${controls}</div>`;
   const control = (r, action, text, title, disabled = false) => `<button data-plan="${action}" data-id="${escape(planEntry(r))}" aria-label="${escape(title + " " + r.id)}" ${disabled ? "disabled" : ""}>${text}</button>`;
   return `<section class="workspace-daily"><div class="workspace-daily-heading"><div><h2 id="daily-title" tabindex="-1">Today’s review plan</h2>
     <p>Confirmed priority sets the suggested order. Move items to fit today’s work.</p></div>
@@ -196,20 +200,26 @@ function attachments(files = []) {
 function decisionHistory(r) {
   const current = currentDecision(r);
   if (!r.decisions.length) return "<p>No confirmed priority for this RFI.</p>";
-  return r.decisions.slice().reverse().map(d => `<article class="workspace-decision"><strong>${escape(priorityLabels[d.priority])}</strong>
+  return r.decisions.slice().reverse().map(d => {
+    const reviewed = r.assessments.filter(a => a.revision === d.revision && d.assessmentIds?.includes(a.id));
+    const sources = reviewed.map(a => `${escape(a.source)} · ${escape(priorityLabels[a.priority] || "Needs information")}`).join(", ");
+    return `<article class="workspace-decision"><strong>${escape(priorityLabels[d.priority])}</strong>
     <span>${d === current ? "Current" : d.revision === r.revision ? "Superseded" : "Earlier revision"} · Rev ${d.revision}</span>
-    <p>${escape(d.reason)}</p><small>${escape(d.by)} · ${escape(when(d.at))}</small></article>`).join("");
+    <p>${escape(d.reason)}</p><p class="workspace-secondary">${sources ? "Recommendations available at confirmation · " + sources : "Confirmed without an AI recommendation."}</p>
+    <small>${escape(d.by)} · ${escape(when(d.at))}</small></article>`;
+  }).join("");
 }
 function decisionsPanel(r) {
-  const assessments = r.assessments.filter(a => a.revision === r.revision);
+  const { proposals: assessments, decision, disagreement, newProposals } = priorityReview(r);
   const earlier = r.assessments.filter(a => a.revision !== r.revision);
   const canAssess = role === "submitter" && !["draft", "acknowledged", "answered", "returned"].includes(r.status);
   const isBusy = requests.has(planEntry(r));
   const card = (a) => `<article class="workspace-assessment"><header><strong>${escape(a.priority ? priorityLabels[a.priority] : "Needs information")}</strong>
-    <span>${escape(a.source)}</span></header><small>Rev ${a.revision} · ${escape(when(a.evaluatedAt))}${a.simulated ? " · Simulated assessment" : ""}</small>
+    <span>${escape(a.source)}</span></header><small>Rev ${a.revision} · ${escape(when(a.evaluatedAt))}${a.simulated ? " · Simulated assessment" : ""}${newProposals.includes(a) ? " · Received after confirmation" : ""}</small>
     <p>${escape(a.explanation)}</p>${renderAssessmentEvidence(a)}</article>`;
   return `<section class="workspace-detail-section"><h3 id="priority-assessments" tabindex="-1">Priority assessments</h3>
-    ${new Set(assessments.map(a => a.priority).filter(Boolean)).size > 1 ? '<p class="workspace-conflict">Recommendations disagree. The submitter chooses the review priority and records a reason.</p>' : ""}
+    ${disagreement ? `<p class="workspace-conflict">${decision ? `Recommendations differ. The GC confirmed ${escape(currentPriority(r))}. See the recorded reason below.` : "Recommendations disagree. The submitter chooses the review priority and records a reason."}</p>` : ""}
+    ${newProposals.length ? `<p class="workspace-assessment-update">${newProposals.length} new ${newProposals.length === 1 ? "assessment" : "assessments"} since confirmation. ${escape(currentPriority(r))} remains in effect.</p>` : ""}
     ${assessments.map(card).join("") || "<p>No assessment for this revision.</p>"}
     ${canAssess ? `<p class="workspace-secondary">Sending to JEV shares this revision’s RFI ID, question, submission date and needed-by date with the configured service.</p>
       <div class="workspace-actions"><button data-assess="live" ${isBusy ? "disabled" : ""}>${isBusy ? "Evaluating…" : assessments.some(a => !a.simulated) ? "Classify again with JEV" : "Send to JEV"}</button>
@@ -219,7 +229,7 @@ function decisionsPanel(r) {
     </section><section class="workspace-detail-section"><h3>GC priority decision</h3>${decisionHistory(r)}</section>`;
 }
 function details(r) {
-  const official = ["answered", "acknowledged"].includes(r.status);
+  const official = responseVisibility(r, role) === "issued";
   const actions = allowedActions(r, role);
   const primary = actions.includes("route") ? "route" : actions[0];
   const lastDelivery = r.history.findLast(event => event.recipient && event.recipient !== event.actor);
@@ -232,7 +242,7 @@ function details(r) {
     ${official ? `<section class="workspace-detail-section official-response"><h3>Issued technical response</h3><p>${escape(r.response)}</p>
       <p class="workspace-secondary">${escape(when(r.responseDate))}${r.signoff ? ` · Reviewed by ${escape(r.signoff.reviewer)} · ${escape(r.signoff.reference)} · Issued by ${escape(r.signoff.issuedBy)}` : ""}</p></section>` : ""}
     <dl class="workspace-facts">${fact("Submitted by", r.originator)}${fact("Technical responder", r.assignee || "Pending routing")}
-      ${fact("Submission date",r.submittedDate)}${fact("Needed by",r.due || r.requestedBy)}${fact("Source",r.source)}${fact("Revision",r.revision)}
+      ${fact("Submission date",r.submittedDate)}${fact("Needed by",neededBy(r))}${fact("Source",r.source)}${fact("Revision",r.revision)}
       ${r.location ? fact("Location",r.location) : ""}${r.reference ? fact("Drawing / specification",r.reference) : ""}</dl>
     <section class="workspace-detail-section"><h3>RFI question and supporting information</h3><p>${escape(r.question)}</p>
       ${r.attachments?.length ? `<p class="workspace-secondary">Attachment references · ${escape(r.attachments.join(", "))}</p>` : ""}${attachments(r.files)}</section>
@@ -242,18 +252,18 @@ function details(r) {
       ${r.history.length ? `<ol class="exchange-list">${r.history.map(h => `<li><strong>${escape(h.actor)}${h.recipient && h.recipient !== h.actor ? ` → ${escape(h.recipient)}` : ""}</strong>
         <small>${escape(h.kind ? labels[h.kind] || h.kind : "Earlier activity")} · ${escape(when(h.at || h.date))}${h.revision ? ` · Rev ${h.revision}` : ""}</small>
         <p>${escape(h.text)}</p></li>`).join("")}</ol>` : "<p>No handoffs yet.</p>"}</section>
-    ${role === "responder" && r.response && !official ? `<section class="workspace-detail-section"><h3>Response draft</h3><p>${escape(r.response)}</p></section>` : ""}
+    ${responseVisibility(r, role) === "draft" ? `<section class="workspace-detail-section"><h3>Response draft</h3><p>${escape(r.response)}</p></section>` : ""}
     ${r.revisions?.length ? `<details class="workspace-detail-section"><summary>Previous revisions (${r.revisions.length})</summary>
       ${r.revisions.slice().reverse().map(v => `<section><h3>${escape(v.title)}</h3>
-        <small>${escape(when(v.date))} · ${escape(v.revisionReason)} · Needed by ${escape(v.due || v.requestedBy || "unknown")}</small>
-        <p>${escape(v.question)}</p>${v.response ? `<p>Previous response · ${escape(v.response)}</p>` : ""}${attachments(v.files)}</section>`).join("")}</details>` : ""}`;
+        <small>${v.revision ? "Rev " + escape(v.revision) + " · " : ""}${escape(when(v.date))} · ${escape(v.revisionReason)} · Needed by ${escape(neededBy(v) || "unknown")}</small>
+        <p>${escape(v.question)}</p>${responseVisibility(v,role) ? `<p>${responseVisibility(v,role) === "issued" ? "Previously issued response" : "Earlier response draft"} · ${escape(v.response)}</p>` : ""}${attachments(v.files)}</section>`).join("")}</details>` : ""}`;
 }
 
 function actionFields(action, r) {
   if (["create", "edit", "revise"].includes(action)) {
     return field("Subject", "title", r?.title, { required: true }) +
       field("RFI question and supporting information", "question", r?.question, { required: true, multiline: true }) +
-      field("Needed-by date", "requestedBy", r?.due || r?.requestedBy, { type: "date" }) +
+      field("Needed-by date", "requestedBy", r ? neededBy(r) : "", { type: "date" }) +
       field("Location", "location", r?.location) + field("Drawing / specification reference", "reference", r?.reference) +
       field("Attachment reference", "attachment", r?.attachments?.join(", ")) +
       '<label>Add files<input type="file" name="files" accept=".pdf,.png,.jpg,.jpeg" multiple></label><p class="workspace-secondary">PDF, PNG or JPEG · Up to 3 files, 1 MB each.</p>' +
@@ -282,7 +292,7 @@ function actionFields(action, r) {
 function showDialog(r, action = "") {
   fileUrls.forEach(u => URL.revokeObjectURL(u)); fileUrls = [];
   selected = r?.id || "";
-  openedRecord = r ? JSON.stringify(r) : "";
+  openedRecord = r ? structuredClone(r) : null;
   mode = action;
   dialog.innerHTML = `<header class="workspace-dialog-header"><div><p class="overline">${escape(r?.id || "New RFI")}${r ? " · Rev " + r.revision : ""}</p>
     <h2 id="dialog-title">${escape(action ? labels[action] : r.title)}</h2></div><button type="button" data-close aria-label="Close detail">✕</button></header>
@@ -319,8 +329,11 @@ async function saveAction(event) {
       if (action === "create" && role === "submitter") {
         const next = 1 + Math.max(0,...fresh.map(x => Number(/^RFI-(\d+)$/.exec(x.id)?.[1]) || 0));
         r = makeDraft("RFI-" + String(next).padStart(3, "0")); fresh.push(r);
-      } else if (!r || JSON.stringify(r) !== initial) {
+      } else if (!actionSnapshotMatches(initial, r, action)) {
         throw new Error("This RFI changed in another view. Close the form and reopen the latest record.");
+      }
+      if (action === "decide") {
+        values.reviewedAssessmentIds = initial.assessments.filter(a => a.revision === initial.revision).map(a => a.id);
       }
       if (["edit", "revise", "create"].includes(action)) {
         values.attachments = values.attachment ? [values.attachment] : [];
@@ -344,7 +357,7 @@ async function assess(record, source) {
   const sourceRecord = structuredClone(record);
   const refresh = () => {
     const fresh = records.find(r => r.id === record.id);
-    if (dialog.open && selected === record.id && !mode && fresh) showDialog(fresh);
+    if (dialog.open && selected === record.id && !mode && fresh && visibleTo(fresh,role)) showDialog(fresh);
   };
   try {
     refresh();

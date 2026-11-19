@@ -21,3 +21,9 @@ Known deliberate differences: `signin.html` is now served (Render's allowlist om
 not yet started (Workers allow ~30 s of background work after a client leaves).
 
 Smoke test: `node scripts/smoke-test.mjs https://<worker-url> [--batch]`
+
+## Demo 4 on the team's existing service
+
+The live preview calls `info492-demo2.info492.workers.dev`. The root Wrangler configuration defaults to a different service name, `info492`. From the repository root, prepare the current frontend and Worker with `node scripts/build-worker.js`. To target the existing team service on its next approved release, use the root entry point with `wrangler deploy --config wrangler.jsonc --name info492-demo2` in the account that owns the service. Retain its existing secret and Durable Object binding. The `cloudflare-migration/` directory contains the earlier migration template.
+
+After the release, classify one synthetic RFI and inspect its review decision export. Live proposals from this Worker include `model` and `promptVersion`. Updating only the GitHub Pages frontend leaves the API response format on the deployed backend in effect.

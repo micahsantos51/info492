@@ -1,9 +1,9 @@
-import { describeEvidence, renderAssessmentEvidence } from './jev-evidence.js';
+import { describeEvidence, renderAssessmentEvidence } from './jev-evidence.js?v=20261118-handoffs';
 import { JEV_PRIORITY_CATEGORIES, JEV_PRIORITY_LABELS } from './jev-priority.js';
 
 export { renderAssessmentEvidence };
 
-function workspaceInput(record) {
+export function workspaceInput(record) {
   return {
     submitted_date: record.submittedDate || record.submitted_date || null,
     due_date: record.due || record.requestedBy || record.neededBy || record.due_date || null,

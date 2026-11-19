@@ -34,7 +34,7 @@ export function mergeRfiRecords(board, records, origin = 'user-import') {
     const key = JSON.stringify([origin, record.package_id, record.rfi_id]);
     const old = board.items.find(x=>x.key===key);
     const result = {priority:null, priority_reason:'Not classified yet.', assessment_state:'not_attempted', missing_information:[], suggested_gc_review_action:'Review the submitted description and decide the next coordination step.'};
-    const fresh = {key, origin, record, result, run_id:'', metadata:{provider:'Jev',model:'jev-latest'}, analyzed_at:'', classification:null, classification_input:null, classification_state:'not_classified'};
+    const fresh = {key, origin, record, result, run_id:'', metadata:{provider:'Jev',model:'jev-latest'}, analyzed_at:'', classification:null, classification_input:null, classification_error:null, classification_state:'not_classified'};
     if (old) { Object.assign(old, fresh); old.analysis_updated=true; updated++; }
     else { board.items.push({...fresh, status:'suggested', order:board.items.length, plan_date:null, due_override:'', owner:'', history:[]}); added++; }
   }
@@ -48,10 +48,26 @@ export function jevInputForBoardItem(item, dueDate = item.due_override) {
     description: item.record.description || null,
   };
 }
+function priorityReason(evaluation) {
+  return `Jev classification: ${evaluation.category.replace('_',' ')} (${Math.round(evaluation.confidence * 100)}% confidence).`;
+}
+
 export function refreshClassificationState(item) {
-  if (!item.classification || item.classification_state === 'pending') return;
+  if (item.classification_state === 'pending') return;
   const current = JSON.stringify(jevInputForBoardItem(item));
-  item.classification_state = current === item.classification_input ? 'classified' : 'stale';
+  // Earlier saved boards could have a request error in the previous assessment's reason.
+  if (item.result.priority_reason?.startsWith('Classification failed:')) {
+    item.result.priority_reason = item.classification ? priorityReason(item.classification) : 'Not classified yet.';
+  }
+  if (item.classification && current === item.classification_input) item.classification_state = 'classified';
+  else if (item.classification_error?.input === current) item.classification_state = 'error';
+  else item.classification_state = item.classification ? 'stale' : 'not_classified';
+}
+
+export function recordClassificationError(item, input, message) {
+  item.classification_error = { input, message };
+  item.classification_state = 'error';
+  refreshClassificationState(item);
 }
 
 export function applyJevClassification(item, evaluation, inputKey) {
@@ -59,9 +75,10 @@ export function applyJevClassification(item, evaluation, inputKey) {
   item.classification = {category:evaluation.category, confidence:evaluation.confidence,
     model:evaluation.model || null, promptVersion:evaluation.promptVersion || null};
   item.classification_input = inputKey;
+  item.classification_error = null;
   item.classification_state = 'classified';
   item.result.priority = priority;
-  item.result.priority_reason = `Jev classification: ${evaluation.category.replace('_',' ')} (${Math.round(evaluation.confidence*100)}% confidence).`;
+  item.result.priority_reason = priorityReason(evaluation);
   item.result.assessment_state = evaluation.category === 'lacking_info' ? 'lacking_info' : 'assigned';
   item.result.missing_information = evaluation.category === 'lacking_info' ? ['The submitted information may not support a defensible priority decision. Review the source RFI.'] : [];
   item.result.suggested_gc_review_action = evaluation.category === 'lacking_info' ? 'Review the source RFI and clarify the missing context before assigning priority.' : 'Review Jev’s recommendation and confirm the next coordination action.';

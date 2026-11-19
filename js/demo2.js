@@ -1,3 +1,4 @@
+import { describeEvidence, renderAssessmentEvidence } from "./jev-evidence.js";
 import { snapshotStore, mergeRetry } from "./demo2-recovery.js";
 import { teamTokenStorage } from "./demo2-auth.js";
 import { parseCSV } from "./rfi-data.js";
@@ -429,6 +430,7 @@ async function analyze(slot = null, retry = false) {
   let run = {
     run_id: crypto.randomUUID(),
     started_at: started,
+    records: structuredClone(records),
     metadata: state.config.metadata,
     kind: slot === null ? "development" : `ai-${slot + 1}`,
     policy: slot === null ? "working-triage-0.4" : state.study.policy,
@@ -485,7 +487,7 @@ async function analyze(slot = null, retry = false) {
           throw new Error(
             "Response configuration differs from the frozen setup.",
           );
-        run = { ...run, ...event, kind: run.kind, results: [] };
+        run = { ...run, ...event, records: run.records, kind: run.kind, results: [] };
       } else if (event.event === "item") {
         if (
           !records.some((r) => r.rfi_id === event.result.rfi_id) ||
@@ -562,7 +564,6 @@ async function analyze(slot = null, retry = false) {
         });
   } finally {
     run.completed_at ||= new Date().toISOString();
-    run.records = structuredClone(records);
     if (retry) run = mergeRetry(previous, run);
     state.results = run.results;
     state.resultRun = run;
@@ -717,19 +718,23 @@ $("result-tables").onclick = (e) => {
 };
 function openDetail(id) {
   detailId = id;
-  const result = displayedResults().find((r) => r.rfi_id === id),
-    record = (
-      state.resultRun.records ||
-      state.study?.records ||
-      state.selected
-    ).find((r) => r.rfi_id === id);
+  const result = displayedResults().find(entry => entry.rfi_id === id);
+  if (!result) return;
+  const submitted = state.resultRun.records || (state.study && state.runs.includes(state.resultRun) ? state.study.records : []);
+  const record = submitted.find(entry => entry.rfi_id === id);
+  const packet = record
+    ? `<section><h3>${esc(record.title || id)}</h3><p>${esc(record.description)}</p>
+       <details><summary>Full submitted packet</summary><pre>${esc(JSON.stringify(record, null, 2))}</pre></details>
+       <p class="quiet">The description check below counts matching language in the submitted text. Gemini’s validated quotations, when available, appear under each assessed mechanism.</p>
+       ${renderAssessmentEvidence({ evidence: describeEvidence(record) }, { preview: true })}</section>`
+    : '<section><h3>Submitted packet unavailable</h3><p>This run has no saved source packet for this RFI. Description coverage is unavailable.</p></section>';
   $("agent-detail-title").textContent = id;
   const citation = (e) =>
     e?.quote
       ? `<blockquote>“${esc(e.quote)}”<small>Source: ${esc(e.source)} · supplied statement, not independently verified</small></blockquote>`
       : '<p class="quiet">No supporting excerpt supplied.</p>';
   $("agent-detail-body").innerHTML =
-    `<section><h3>${esc(record.title)}</h3><p>${esc(record.description)}</p><details><summary>Full submitted packet</summary><pre>${esc(JSON.stringify(record, null, 2))}</pre></details></section><section><h3>Priority</h3><span class="priority-badge ${result.priority || ""}">${esc(disposition(result))}</span>${result.provisional ? `<p class="agent-detail-flag">Provisional working priority · ${esc(result.working_policy)}. ${result.ai_review_failed ? "AI check failed: this suggestion comes only from submission rules." : "Incomplete evidence: human confirmation required."}</p><p>v0.3 evidence decision: ${esc(result.validated_assessment_state)}. ${esc(result.validated_priority_reason || result.validation_error || "")}</p>` : ""}<p>${esc(result.priority_reason || result.error)}</p><p class="quiet">${esc(result.rule_branch || "No rule applied")} · rubric v0.3</p>${result.mitigation_unverified ? '<p class="agent-detail-flag">Protection is unknown. This P0 is precautionary review, not proof of ineffective mitigation or large loss.</p>' : ""}${result.safety_escalation ? '<p class="agent-detail-flag">Separate safety escalation: request immediate human review under site procedures.</p>' : ""}</section>
+    `${packet}<section><h3>Priority</h3><span class="priority-badge ${result.priority || ""}">${esc(disposition(result))}</span>${result.provisional ? `<p class="agent-detail-flag">Provisional working priority · ${esc(result.working_policy)}. ${result.ai_review_failed ? "AI check failed: this suggestion comes only from submission rules." : "Incomplete evidence: human confirmation required."}</p><p>v0.3 evidence decision: ${esc(result.validated_assessment_state)}. ${esc(result.validated_priority_reason || result.validation_error || "")}</p>` : ""}<p>${esc(result.priority_reason || result.error)}</p><p class="quiet">${esc(result.rule_branch || "No rule applied")} · rubric v0.3</p>${result.mitigation_unverified ? '<p class="agent-detail-flag">Protection is unknown. This P0 is precautionary review, not proof of ineffective mitigation or large loss.</p>' : ""}${result.safety_escalation ? '<p class="agent-detail-flag">Separate safety escalation: request immediate human review under site procedures.</p>' : ""}</section>
  ${
    result.mechanisms
      ?.map(
@@ -747,7 +752,7 @@ function openDetail(id) {
      )
      .join("") || ""
  }
- <section><h3>Potential Impact</h3><p>${esc(result.potential_cost_mechanism || "Not assessed. No dollar estimate has been generated.")}</p><p>Decision date: ${esc(result.decision_date || "Not established")}</p>${result.decision_date ? citation(result.decision_date_evidence) : ""}${(result.schedule_considerations || []).map(citation).join("")}${result.safety_escalation ? citation(result.safety_evidence) : ""}</section><section><h3>Evidence completeness</h3><p>Required checks are derived from Unknown evidence fields. Additional model suggestions may vary between runs.</p>${result.required_missing_information?.length ? `<h4>Required evidence checks</h4><ul>${result.required_missing_information.map(q=>`<li>${esc(q)}</li>`).join("")}</ul>` : "<p>No Unknown checks returned for extracted mechanisms. This does not prove every mechanism was identified.</p>"}<h3>All follow-up information</h3>${result.missing_information?.length ? `<ul>${result.missing_information.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : "<p>No follow-up questions returned. This is not a guarantee of completeness.</p>"}</section><section><h3>GC Review</h3><p>${esc(result.suggested_gc_review_action || "No valid assessment. Check the processing error before retrying.")}</p><p>Supplied reviewer: ${esc(record.assigned_reviewer || "Not recorded; GC to verify routing.")}</p>${result.expedited_verification ? citation(result.expedited_evidence) : ""}</section><details><summary>Run and raw output</summary><pre>${esc(JSON.stringify({ metadata: state.resultRun.metadata, raw_output: result.raw_output, provider_response_id: result.provider_response_id }, null, 2))}</pre></details>`;
+ <section><h3>Potential Impact</h3><p>${esc(result.potential_cost_mechanism || "Not assessed. No dollar estimate has been generated.")}</p><p>Decision date: ${esc(result.decision_date || "Not established")}</p>${result.decision_date ? citation(result.decision_date_evidence) : ""}${(result.schedule_considerations || []).map(citation).join("")}${result.safety_escalation ? citation(result.safety_evidence) : ""}</section><section><h3>Evidence completeness</h3><p>Required checks are derived from Unknown evidence fields. Additional model suggestions may vary between runs.</p>${result.required_missing_information?.length ? `<h4>Required evidence checks</h4><ul>${result.required_missing_information.map(q=>`<li>${esc(q)}</li>`).join("")}</ul>` : "<p>No Unknown checks returned for extracted mechanisms. This does not prove every mechanism was identified.</p>"}<h3>All follow-up information</h3>${result.missing_information?.length ? `<ul>${result.missing_information.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : "<p>No follow-up questions returned. This is not a guarantee of completeness.</p>"}</section><section><h3>GC Review</h3><p>${esc(result.suggested_gc_review_action || "No valid assessment. Check the processing error before retrying.")}</p><p>Supplied reviewer: ${esc(record?.assigned_reviewer || "Not recorded; GC to verify routing.")}</p>${result.expedited_verification ? citation(result.expedited_evidence) : ""}</section><details><summary>Run and raw output</summary><pre>${esc(JSON.stringify({ metadata: state.resultRun.metadata, raw_output: result.raw_output, provider_response_id: result.provider_response_id }, null, 2))}</pre></details>`;
   if (state.study && state.runs.includes(state.resultRun)) {
     const review = state.reviews[state.resultRun.run_id]?.[id] || {};
     $("agent-detail-body").insertAdjacentHTML(

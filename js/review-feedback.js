@@ -1,10 +1,11 @@
-// Keep the original inputs paired with the assessments the coordinator actually saw.
+import { workspaceInput } from './workspace-assessment.js?v=20261118-handoffs';
+
 export function reviewDecisionExport(records) {
   const decisions = [];
   for (const record of records) {
     const assessments = new Map(record.assessments.map((assessment) => [assessment.id, assessment]));
     for (const decision of record.decisions) {
-      const proposals = decision.assessmentIds.flatMap((id) => {
+      const proposals = (decision.assessmentIds ?? []).flatMap((id) => {
         const item = assessments.get(id);
         if (!item || item.revision !== decision.revision || item.rfiId !== record.id) return [];
         return [{
@@ -14,8 +15,13 @@ export function reviewDecisionExport(records) {
           evaluationInput: item.evaluationInput, evidence: item.evidence,
         }];
       });
+      const source = record.revision === decision.revision
+        ? record
+        : record.revisions?.find(snapshot => snapshot.revision === decision.revision);
       decisions.push({
         rfiId: record.id, revision: decision.revision, confirmedAt: decision.at,
+        decisionMaker: decision.by ?? null,
+        evaluationInput: source ? workspaceInput(source) : proposals[0]?.evaluationInput ?? null,
         confirmedPriority: decision.priority, reason: decision.reason, proposals,
       });
     }
