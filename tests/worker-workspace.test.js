@@ -71,7 +71,7 @@ test("Cloudflare workspace endpoints preserve account scope, RFI threads, status
     const reply = await request(`/api/workspace/rfis/${sent.data.rfi.id}`, { method: "POST", token: responder.token, body: { message: text } });
     assert.equal(reply.response.status, 200);
   }
-  await request(`/api/workspace/rfis/${sent.data.rfi.id}`, { method: "POST", token: responder.token, body: { status: "reviewed" } });
+  await request(`/api/workspace/rfis/${sent.data.rfi.id}/status`, { method: "POST", token: responder.token, body: { status: "reviewed" } });
   const thread = await request(`/api/workspace/rfis/${sent.data.rfi.id}`, { token: sender.token });
   assert.deepEqual(thread.data.rfi.messages.map((message) => message.text), ["First response", "Follow-up response"]);
   assert.equal(thread.data.rfi.status, "reviewed");
