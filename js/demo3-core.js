@@ -55,6 +55,10 @@ export function applyJevClassification(item, evaluation, inputKey) {
   return item;
 }
 export function due(item) { return validDate(item.due_override) ? item.due_override : validDate(item.result.decision_date) ? item.result.decision_date : ''; }
+export function cardDueDate(item, kind) {
+  if (kind === 'suggested') return validDate(item.due_override) ? item.due_override : item.record.due_date || '';
+  return due(item) || (validDate(item.record.due_date) ? item.record.due_date : '');
+}
 export function rankable(item) { return ['P0','P1','P2'].includes(item.result.priority); }
 export function recommend(items, day) {
   return items.filter(x=>x.status==='suggested' && rankable(x)).sort((a,b)=>['P0','P1','P2'].indexOf(a.result.priority)-['P0','P1','P2'].indexOf(b.result.priority) || (due(a)||'9999').localeCompare(due(b)||'9999') || a.record.rfi_id.localeCompare(b.record.rfi_id) || a.key.localeCompare(b.key));

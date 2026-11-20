@@ -1,4 +1,4 @@
-import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard } from './demo3-core.js?v=20261112-reset';
+import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, cardDueDate, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard } from './demo3-core.js?v=20261119-due-date';
 import { JEV_PRIORITY_CATEGORIES, JEV_PRIORITY_LABELS } from './jev-priority.js?v=20261109-sharepoint';
 import { parseCSV } from './rfi-data.js?v=20261110-rfi-upload';
 import { workspaceFetch } from './workspace-api.js?v=20261120-api';
@@ -21,7 +21,7 @@ function scope() { return board.items; }
 function matches(x) { return `${x.record.rfi_id} ${x.record.title} ${x.owner || ''}`.toLowerCase().includes($('search').value.toLowerCase()); }
 const label = x => x.classification ? JEV_PRIORITY_LABELS[x.classification.category] : 'Not classified';
 function badges(x) { const kind = x.classification ? x.classification.category : 'unclassified'; return `<span class="badge ${esc(kind)}">${esc(label(x))}</span>${x.classification ? `<span class="badge">${Math.round(x.classification.confidence * 100)}%</span>` : ''}${x.classification_state === 'pending' ? '<span class="badge">Working…</span>' : ''}${x.classification_state === 'error' ? '<span class="badge warning-badge">Try again</span>' : ''}`; }
-function dateText(x, kind) { const date = kind === 'suggested' ? (validDate(x.due_override) ? x.due_override : x.record.due_date) : due(x); return date ? `${date}${date < day() ? ' · overdue' : date === day() ? ' · today' : ''}` : 'No date'; }
+function dateText(x, kind) { const date = cardDueDate(x, kind); return date ? `${date}${date < day() ? ' · overdue' : date === day() ? ' · today' : ''}` : 'No date'; }
 function evidenceMarkup(description) { const evidence = analyzeDescriptionEvidence(description); return `<section class="evaluation-evidence"><h3>Description evidence</h3><p class="small">These indicators reflect explicit wording found in the RFI description only; they do not establish actual cost or schedule impact.</p><dl>${evidence.map(item => `<div><dt>${esc(item.label)}</dt><dd><strong>${esc(item.summary)}</strong>${item.excerpts.map(excerpt => `<blockquote>${esc(excerpt)}</blockquote>`).join('')}</dd></div>`).join('')}</dl></section>`; }
 function why(x) { if (x.followup_due && x.followup_due <= day()) return 'Follow-up due'; if (due(x) && due(x) <= day()) return 'Due now'; return x.result.priority_reason || 'Not classified'; }
 const button = (action, text, key, cls = '') => `<button class="${cls}" data-action="${action}" data-key="${esc(key)}">${text}</button>`;
