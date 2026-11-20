@@ -15,6 +15,14 @@ if (connection.backend_origin) {
       "Published backend must be an HTTPS origin without credentials, path or query.",
     );
 }
+const workspaceConnection = JSON.parse(await readFile("data/workspace-config.json", "utf8"));
+if (Object.keys(workspaceConnection).some((key) => key !== "backend_origin"))
+  throw new Error("Workspace API config may contain only backend_origin.");
+if (typeof workspaceConnection.backend_origin !== "string")
+  throw new Error("Workspace backend_origin must be a string.");
+const workspaceUrl = new URL(workspaceConnection.backend_origin);
+if (workspaceUrl.protocol !== "https:" || workspaceConnection.backend_origin !== workspaceUrl.origin)
+  throw new Error("Workspace backend must be an HTTPS origin without credentials, path or query.");
 for (const page of [
   "index.html",
   "dashboard.html",

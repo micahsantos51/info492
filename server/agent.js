@@ -23,6 +23,7 @@ export function makeAgent({
   rubric,
   providerFetch = fetch,
   executionMode = "provider",
+  sourceTexts,
 }) {
   const prompt = extractionPrompt(rubric);
   const selectedProvider = env.AI_PROVIDER || "openai";
@@ -53,9 +54,9 @@ export function makeAgent({
     engine_version: ENGINE_VERSION,
     input_version: INPUT_VERSION,
     implementation_hash: hash(
-      ["./agent.js", "./extraction.js", "../js/demo2-core.js"]
-        .map((path) => readFileSync(new URL(path, import.meta.url), "utf8"))
-        .join("\n"),
+      (sourceTexts ?? ["./agent.js", "./extraction.js", "../js/demo2-core.js"].map((path) =>
+        readFileSync(new URL(path, import.meta.url), "utf8"),
+      )).join("\n"),
     ),
     rubric_hash: hash(rubric),
     prompt_hash: hash(prompt),

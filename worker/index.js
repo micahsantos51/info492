@@ -9,6 +9,7 @@ import {
   validateJevPriorityRequest,
 } from "../server/jev-priority.js";
 import { RUBRIC, SOURCE_TEXTS } from "./sources.js";
+import { handleWorkspace } from "./workspace.js";
 export { Limits } from "./limits.js";
 
 const encoder = new TextEncoder();
@@ -104,6 +105,7 @@ async function handle(request, env, ctx) {
   const path = url.pathname;
   const address = request.headers.get("CF-Connecting-IP") || "unknown";
   try {
+    if (path.startsWith("/api/workspace/")) return await handleWorkspace(request, env, json);
     if (path === "/api/config" && request.method === "GET")
       return json(200, {
         ...agent.config(),

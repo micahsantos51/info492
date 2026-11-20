@@ -1,4 +1,5 @@
 import { readFiles, fileUrl } from "./workspace-files.js";
+import { workspaceFetch } from "./workspace-api.js?v=20261120-api";
 import { allowedActions, dateIn, initialRecords, project, roles, statuses, visibleTo, reviseRecord } from "./workspace-data.js";
 
 const sessionKey = "info492-role-session";
@@ -88,7 +89,7 @@ function start() {
 
 async function accountApi(path, body) {
   const token = sessionStorage.getItem("info492-workspace-token");
-  const response = await fetch(`/api/workspace${path}`, { method: body === undefined ? "GET" : "POST", headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Authorization: `Bearer ${token}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const response = await workspaceFetch(path, { method: body === undefined ? "GET" : "POST", headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Authorization: `Bearer ${token}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const data = await response.json(); if (!response.ok) throw new Error(data.error || "Workspace request failed."); return data;
 }
 let accountUser;
@@ -508,7 +509,7 @@ content.addEventListener("click", (event) => {
       accountApi(`/rfis/${button.dataset.accountRfi}`).then(({ rfi }) => accountForm(rfi)).catch(e => { notice.textContent = e.message; notice.hidden = false; });
     }
     if (button.dataset.accountStatus && accountSelected) accountApi(`/rfis/${accountSelected}`, { status: button.dataset.accountStatus }).then(({ rfi }) => { accountRecords = accountRecords.map(r => r.id === rfi.id ? rfi : r); dialog.close(); renderAccountWorkspace(); }).catch(e => { notice.textContent = e.message; notice.hidden = false; });
-    if (button.dataset.accountFile !== undefined && accountSelected) fetch(`/api/workspace/rfis/${accountSelected}/attachments/${button.dataset.accountFile}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("info492-workspace-token")}` } }).then(async response => { if (!response.ok) throw new Error("Attachment access denied."); const blob = await response.blob(); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = accountRecords.find(r => r.id === accountSelected)?.files?.[Number(button.dataset.accountFile)]?.name || "attachment"; link.click(); URL.revokeObjectURL(link.href); }).catch(e => { notice.textContent = e.message; notice.hidden = false; });
+    if (button.dataset.accountFile !== undefined && accountSelected) workspaceFetch(`/rfis/${accountSelected}/attachments/${button.dataset.accountFile}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("info492-workspace-token")}` } }).then(async response => { if (!response.ok) throw new Error("Attachment access denied."); const blob = await response.blob(); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = accountRecords.find(r => r.id === accountSelected)?.files?.[Number(button.dataset.accountFile)]?.name || "attachment"; link.click(); URL.revokeObjectURL(link.href); }).catch(e => { notice.textContent = e.message; notice.hidden = false; });
     return;
   }
   notice.hidden = true;
