@@ -50,6 +50,10 @@ export function mergeAccountRfiRecords(board, records, origin) {
   }
   return merged;
 }
+export function accountRfiId(record) {
+  const id = record?.rfi_id || record?.id || record?.account_id;
+  return typeof id === 'string' ? id.trim() : '';
+}
 export function applyJevClassification(item, evaluation, inputKey) {
   const priority = {high:'P0', mid:'P1', low:'P2'}[evaluation.category] || null;
   item.classification = {category:evaluation.category, confidence:evaluation.confidence};

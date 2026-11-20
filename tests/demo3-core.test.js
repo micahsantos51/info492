@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyBoard,normalizeRfiRecords,mergeRfiRecords,mergeAccountRfiRecords,applyJevClassification,cardDueDate,change,reorder,recommend,wakeSnoozed,validDate,generatePlan,planCandidates,resetDemoBoard} from '../js/demo3-core.js';
+import {emptyBoard,normalizeRfiRecords,mergeRfiRecords,mergeAccountRfiRecords,accountRfiId,applyJevClassification,cardDueDate,change,reorder,recommend,wakeSnoozed,validDate,generatePlan,planCandidates,resetDemoBoard} from '../js/demo3-core.js';
 
 const records=[
   {rfi_id:'A',title:'Clarification',description:'Confirm the structural detail before proceeding.',submitted_date:'2026-10-29',due_date:'2026-11-02',package_id:'P'},
@@ -29,12 +29,14 @@ test('same imported record is refreshed without losing human planning fields',()
 
 test('account RFI merges retain private routing and thread fields for API actions',()=>{
  const board=emptyBoard(),origin='account:user-1';
- const assigned={...records[0],id:'abc123',account_id:'abc123',sender_name:'Sender',sender_email:'sender@example.com',files:[{name:'detail.pdf'}],messages:[{text:'Earlier reply'}],account_status:'submitted'};
+ const assigned={...records[0],rfi_id:'abc123',id:'abc123',account_id:'abc123',sender_name:'Sender',sender_email:'sender@example.com',files:[{name:'detail.pdf'}],messages:[{text:'Earlier reply'}],account_status:'submitted'};
  mergeAccountRfiRecords(board,[assigned],origin);
  const item=board.items[0];assert.equal(item.record.account_id,'abc123');assert.equal(item.record.sender_email,'sender@example.com');assert.equal(item.record.messages[0].text,'Earlier reply');
  const updated={...assigned,account_status:'reviewed',messages:[...assigned.messages,{text:'New reply'}]};
  mergeAccountRfiRecords(board,[updated],origin);
  assert.equal(item.record.account_id,'abc123');assert.equal(item.record.account_status,'reviewed');assert.equal(item.record.messages.length,2);
+ assert.equal(accountRfiId(item.record),'abc123');
+ assert.equal(accountRfiId({rfi_id:'fallback-id'}),'fallback-id');
 });
 
 test('cards fall back to the source due date when no planning or decision date exists',()=>{
