@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyBoard,normalizeRfiRecords,mergeRfiRecords,applyJevClassification,change,reorder,recommend,wakeSnoozed,validDate,generatePlan,planCandidates,resetDemoBoard} from '../js/demo3-core.js';
+import {emptyBoard,normalizeRfiRecords,mergeRfiRecords,applyJevClassification,cardDueDate,change,reorder,recommend,wakeSnoozed,validDate,generatePlan,planCandidates,resetDemoBoard} from '../js/demo3-core.js';
 
 const records=[
   {rfi_id:'A',title:'Clarification',description:'Confirm the structural detail before proceeding.',submitted_date:'2026-10-29',due_date:'2026-11-02',package_id:'P'},
@@ -27,6 +27,14 @@ test('same imported record is refreshed without losing human planning fields',()
  assert.equal(board.items.length,2);assert.equal(a.owner,'GC');assert.equal(a.due_override,'2026-11-05');assert.equal(a.classification,null);assert.equal(a.status,'planned');
 });
 
+test('cards fall back to the source due date when no planning or decision date exists',()=>{
+ const item=fixture().items[0];
+ assert.equal(cardDueDate(item,'planned'),'2026-11-02');
+ item.due_override='2026-11-04';
+ assert.equal(cardDueDate(item,'planned'),'2026-11-04');
+ assert.equal(cardDueDate(item,'suggested'),'2026-11-04');
+});
+
 test('priority outranks date; add and reorder preserve one task per item',()=>{
  const board=fixture(),[a,b]=board.items;a.due_override='2026-10-29';assert.deepEqual(recommend(board.items,'2026-10-30').map(x=>x.record.rfi_id),['B','A']);
  change(board,a.key,'add',{},'2026-10-30');change(board,a.key,'add',{},'2026-10-30');change(board,b.key,'add',{},'2026-10-30');assert.equal(board.items.filter(x=>x.status==='planned').length,2);reorder(board,b.key,a.key);assert.equal(board.items.sort((x,y)=>x.order-y.order)[0].record.rfi_id,'B');
@@ -35,6 +43,16 @@ test('priority outranks date; add and reorder preserve one task per item',()=>{
 test('snooze wakes on its date; review records an action without closing source RFI',()=>{
  const board=fixture(),item=board.items[0],source=structuredClone(item.record);change(board,item.key,'snooze',{date:'2026-11-01',reason:'Await response'},'2026-10-30');wakeSnoozed(board,'2026-10-31');assert.equal(item.status,'snoozed');wakeSnoozed(board,'2026-11-01');assert.equal(item.status,'suggested');
  change(board,item.key,'review',{outcome:'Clarification requested',note:'Recorded follow-up'},'2026-10-30');assert.equal(item.status,'reviewed');assert.deepEqual(item.record,source);assert.equal(item.record.status,undefined);
+});
+
+test('review notes are optional for scheduled follow-up and no further action outcomes',()=>{
+ for(const outcome of ['Follow-up scheduled','Reviewed — no further action today']){
+  const board=fixture(),item=board.items[0];
+  change(board,item.key,'review',{outcome,note:''},'2026-10-30');
+  assert.equal(item.status,'reviewed');assert.equal(item.outcome,outcome);assert.equal(item.note,'');
+ }
+ const board=fixture();
+ assert.throws(()=>change(board,board.items[0].key,'review',{outcome:'Clarification requested',note:'  '},'2026-10-30'),/record your action/);
 });
 
 test('plan generation honors capacity, project scope and completed work',()=>{

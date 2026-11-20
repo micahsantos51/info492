@@ -13,8 +13,9 @@
 
 <body><a class="skip" href="#board">Skip to board</a>
     <header><a class="brand" href="index.html">INFO 492 <span>·</span> Team 1</a>
-        <nav aria-label="Main navigation"><a href="dashboard.html">Dashboard</a><a href="workspace.html" id="account-workspace-link">RFI workspace</a><a href="demo3.html"
-                aria-current="page">Daily To-Do</a></nav><span class="role">RFI review</span><button id="account-signout" hidden>Sign out</button>
+        <nav aria-label="Main navigation"><a href="dashboard.html">Dashboard</a><a href="workspace.html"
+                id="account-workspace-link">RFI workspace</a><a href="demo3.html" aria-current="page">Daily To-Do</a>
+        </nav><span class="role">RFI review</span><button id="account-signout" hidden>Sign out</button>
     </header>
     <main>
         <div class="heading">
@@ -27,12 +28,16 @@
                 <p id="counts"></p>
             </div>
         </div>
-        <p class="disclosure" id="board-disclosure">Select RFIs from the project list, then review Jev’s priority suggestions.</p>
+        <p class="disclosure" id="board-disclosure">Select RFIs from the project list, then review Jev’s priority
+            suggestions.</p>
         <section class="connection" aria-labelledby="connection-title">
             <div class="row">
                 <div>
                     <h2 id="connection-title">Jev</h2>
-                    <p class="jev-description">Jev is our AI-assisted RFI prioritization tool. It reviews each selected RFI’s description and submitted and needed-by dates, then suggests a Low, Mid, High, or Lacking info level with a confidence score. Dates provide context; the description drives the priority. Use the suggestions to organize daily review—your team makes the final decision.</p>
+                    <p class="jev-description">Jev is our AI-assisted RFI prioritization tool. It reviews each selected
+                        RFI’s description and submitted and needed-by dates, then suggests a Low, Mid, High, or Lacking
+                        info level with a confidence score. Dates provide context; the description drives the priority.
+                        Use the suggestions to organize daily review—your team makes the final decision.</p>
                     <p id="jev-connection-status" role="status" aria-live="polite">Checking connection…</p>
                 </div>
             </div><label class="consent"><input id="jev-consent" type="checkbox"> Allow Jev to review selected RFI dates
@@ -128,8 +133,11 @@
                         maxlength="100" placeholder="Name"></label></div><button type="button"
                 id="save-details">Save</button>
             <section id="account-conversation" hidden></section>
-            <label id="response-box-label" hidden>Response Box<textarea id="response-box" rows="4" maxlength="5000" placeholder="Write a response to the sender"></textarea></label><button type="button" id="send-response" hidden>Send response</button>
-            <p id="account-error" role="alert" hidden></p><button type="button" id="mark-in-progress" hidden>Mark In Progress</button>
+            <label id="response-box-label" hidden>Response Box<textarea id="response-box" rows="4" maxlength="5000"
+                    placeholder="Write a response to the sender"></textarea></label><button type="button"
+                id="send-response" hidden>Send response</button>
+            <p id="account-error" role="alert" hidden></p><button type="button" id="mark-in-progress" hidden>Mark In
+                Progress</button>
             <hr><label>Outcome<select id="outcome">
                     <option>Clarification requested</option>
                     <option>Follow-up scheduled</option>
