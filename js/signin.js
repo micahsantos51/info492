@@ -1,3 +1,5 @@
+import { workspaceFetch } from "./workspace-api.js?v=20261120-api";
+
 const form = document.getElementById("signin-form");
 const error = document.getElementById("signin-error");
 const modeButton = document.getElementById("account-mode");
@@ -35,7 +37,7 @@ form.addEventListener("submit", async (event) => {
   const values = Object.fromEntries(new FormData(form));
   try {
     const endpoint = mode === "register" ? "/api/workspace/register" : "/api/workspace/login";
-    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
+    const response = await workspaceFetch(endpoint.replace("/api/workspace", ""), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
     let data;
     try { data = JSON.parse(await response.text()); }
     catch { throw new Error("The account API did not return JSON. Open this page through the running Node service, not a static file or static-hosted copy."); }
