@@ -17,3 +17,4 @@ The list data is bundled at `data/realData/answerTest.json` and contains ten RFI
 - Jev receives the selected RFI’s submitted date, due date and description after the user authorizes sharing. The backend receives the RFI ID to associate the response.
 - Classifications and review notes are stored in this browser. Demo 3 does not modify a source RFI or connect to SharePoint.
 - High, Mid and Low classifications can be planned. RFIs needing more information remain available for human review.
+- After classification, the RFI detail view shows explicit wording found in its description about cost, schedule, work impact, and safety/compliance. These keyword-based indicators include matching excerpts and distinguish detected amounts or time details from unquantified mentions. They inspect description text only, do not assess whether an impact is real, and do not affect Jev's priority or confidence.
