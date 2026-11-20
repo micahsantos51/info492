@@ -1,6 +1,14 @@
-# Role workspaces — local implementation
+# Role workspaces
 
-Open `signin.html`, select a persona, then continue. Public project and demo pages remain accessible without signing in.
+Open `signin.html` to create an account or sign in. Account RFIs use the Node service and persist in `server-data/rfi-workspace.json` (or the path in `RFI_STORE_PATH`). Keep that path outside publicly served directories. Registration immediately signs in; an email and password identify the account, and the account's saved role and RFI history return on later sign-ins. Recipient access matches the normalized email entered on the RFI. No email confirmation or invitation codes are required. Each checker is scoped to the configured East Link · Station Systems project.
+
+No external email notifications are sent. Email addresses are not verified, so recipient access relies on users signing in with the same address the sender entered. The backend continues to enforce each role's RFI scope. Use persistent storage for `RFI_STORE_PATH` in hosted deployments.
+
+The existing local role demo remains available under “Open the existing local demo workspace.” It retains browser-only fictional fixture behavior and is separate from account permissions.
+
+## Existing local role demo
+
+Open `signin.html`, expand “Open the existing local demo workspace,” select a persona, then continue. Public project and demo pages remain accessible without signing in.
 
 | Role | Scope | Primary actions |
 |---|---|---|
@@ -19,9 +27,9 @@ PDF/PNG/JPEG files are stored locally (maximum three files per RFI, 1 MB per fil
 
 ## Current boundary
 
-This is an interactive local framework using fictional fixtures, not production identity/access control. Session role selection and browser localStorage are used; another browser/device does not share data. Sample recommendations are not new live agent results. The existing public Demo 2 and Demo 3 are unchanged.
+The account workflow uses server-side sessions and record-level checks. The local role demo still uses browser role selection/localStorage and is not production identity/access control. Sample recommendations are not new live agent results. The existing public Demo 2 and Demo 3 are unchanged.
 
-Before production use, connect a shared backend, server-enforced company/record permissions, authenticated identities, durable file storage, an approved technical-signoff workflow, and the teammate-owned dataset/agent. Preserve the same scoped actions and revision invalidation when doing so.
+The local JSON store is intended for a single Node service instance; do not run multiple writers against the same file. Preserve the existing scoped actions and revision invalidation in the local role demo.
 
 ## Validation
 

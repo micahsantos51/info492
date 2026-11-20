@@ -62,6 +62,8 @@ let saving = false;
 let plan = [];
 
 function start() {
+  const token = sessionStorage.getItem("info492-workspace-token");
+  if (token) { startAccountWorkspace(token).catch(() => { content.innerHTML = '<p class="workspace-empty">The account workspace could not load. Please sign in again.</p>'; }); return; }
   role = JSON.parse(sessionStorage.getItem(sessionKey) || "null")?.role;
   if (!Object.hasOwn(roles, role)) {
     window.location.replace("signin.html");
@@ -82,6 +84,58 @@ function start() {
   });
   document.title = `${persona.title} · INFO 492`;
   render();
+}
+
+async function accountApi(path, body) {
+  const token = sessionStorage.getItem("info492-workspace-token");
+  const response = await fetch(`/api/workspace${path}`, { method: body === undefined ? "GET" : "POST", headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Authorization: `Bearer ${token}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const data = await response.json(); if (!response.ok) throw new Error(data.error || "Workspace request failed."); return data;
+}
+let accountUser;
+let accountRecords = [];
+let accountSelected = null;
+let accountBusy = false;
+async function startAccountWorkspace() {
+  const { user } = await accountApi("/me"); accountUser = user;
+  if (user.role === "responder") { location.replace("demo3.html"); return; }
+  byId("identity").textContent = `${user.name} · ${user.role}`; byId("account").hidden = false;
+  byId("sign-out").addEventListener("click", async () => { try { await accountApi("/logout", {}); } finally { sessionStorage.removeItem("info492-workspace-token"); sessionStorage.removeItem("info492-workspace-user"); location.assign("signin.html"); } });
+  accountRecords = (await accountApi("/rfis")).rfis;
+  renderAccountWorkspace();
+}
+function renderAccountWorkspace() {
+  const sender = accountUser.role === "submitter";
+  content.innerHTML = `<div class="workspace-context"><span>${escape(project)} / RFI workspace</span><span class="workspace-tag">Account workspace</span></div>
+    <section class="workspace-heading"><div><p class="overline">${escape(accountUser.email)} · ${escape(accountUser.role)}</p><h1 tabindex="-1">${sender ? "My RFIs" : accountUser.role === "checker" ? "Review Queue" : "Received RFIs"}</h1><p>${sender ? "Create requests and follow each conversation." : accountUser.role === "checker" ? "Review RFIs within your project scope." : "Review requests assigned to your verified email."}</p></div>${sender ? '<button class="workspace-primary" data-account-new>+ New RFI</button>' : ""}</section>
+    <section class="workspace-panel"><div class="workspace-table-scroll"><table class="workspace-table"><thead><tr><th>RFI / Subject</th><th>Other party</th><th>Status</th><th>Due</th></tr></thead><tbody>${accountRecords.map(r => `<tr><td><button class="workspace-record" data-account-rfi="${r.id}"><small>${escape(r.location)}</small><strong>${escape(r.title)}</strong></button></td><td>${escape(sender ? r.recipientEmail : r.senderEmail)}</td><td><span class="workspace-badge" data-status="${r.status}">${escape(r.status)}</span></td><td>${escape(r.due)}</td></tr>`).join("")}</tbody></table></div>${accountRecords.length ? "" : '<p class="workspace-empty">No RFIs are assigned to this account yet.</p>'}</section>
+    <p class="workspace-footnote">Please mark an RFI Resolved when the sender is satisfied. Email notifications are not configured.</p>`;
+}
+function accountForm(record = null) {
+  const isSender = record ? record.senderId === accountUser.id : accountUser.role === "submitter";
+  const recipient = record ? record.recipientEmail === accountUser.email : false;
+  const isChecker = record && accountUser.role === "checker";
+  const conversation = record ? `<section class="workspace-detail-section"><h3>Conversation</h3>${(record.messages || []).map(m => `<article class="workspace-message"><p>${escape(m.text)}</p><small>${escape(m.author)} · ${escape(new Date(m.at).toLocaleString())}</small></article>`).join("") || "<p>No responses yet.</p>"}</section>${isSender || recipient ? '<label>Response Box<textarea name="message" rows="4" maxlength="5000"></textarea></label>' : ""}` : "";
+  let fields = "";
+  if (!record) fields = `<label>Subject<input name="title" required maxlength="220"></label><label>Location<input name="location" required maxlength="220"></label><label>Drawing / specification reference<input name="reference" required maxlength="500"></label><label>Question text<textarea name="question" required rows="5" maxlength="10000"></textarea></label><label>Recipient email<input type="email" name="recipientEmail" required></label><label>Due date<input type="date" name="due" required></label><label>Attachments (optional)<input type="file" name="files" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple></label><p class="workspace-secondary">PDF, PNG, or JPEG · up to 3 files, 1 MB each.</p><label><input type="checkbox" name="send"> Send now (leave unchecked to save as draft)</label>`;
+  const actions = record ? `${(isSender && record.status === "draft" ? '<button type="button" data-account-status="submitted">Send RFI</button>' : "")}${(recipient ? '<button type="button" data-account-status="in_progress">Mark In Progress</button><button type="button" data-account-status="reviewed">Mark Reviewed</button>' : "")}${(isChecker ? '<button type="button" data-account-status="in_progress">Mark In Progress</button><button type="button" data-account-status="reviewed">Mark Reviewed</button>' : "")}${(isSender ? '<button type="button" data-account-status="in_progress">Keep / reopen In Progress</button><button type="button" data-account-status="resolved">Mark Resolved</button>' : "")}` : "";
+  dialog.innerHTML = `<header class="workspace-dialog-header"><div><p class="overline">${record ? escape(record.id.slice(0, 8)) : "New RFI"}</p><h2>${record ? escape(record.title) : "Create RFI"}</h2></div><button type="button" data-close aria-label="Close">✕</button></header><div class="workspace-dialog-body">${record ? `<form id="account-rfi-form"><p><span class="workspace-badge">${escape(record.status)}</span> · Due ${escape(record.due)}</p><dl class="workspace-facts"><div><dt>From</dt><dd>${escape(record.senderName)} · ${escape(record.senderEmail)}</dd></div><div><dt>To</dt><dd>${escape(record.recipientEmail)}</dd></div><div><dt>Location</dt><dd>${escape(record.location)}</dd></div><div><dt>Drawing / specification</dt><dd>${escape(record.reference)}</dd></div></dl><section class="workspace-detail-section"><h3>Original Question</h3><p>${escape(record.question)}</p></section><section class="workspace-detail-section"><h3>Attachments</h3>${(record.files || []).map((f, i) => `<button type="button" data-account-file="${i}">${escape(f.name)} · Open</button>`).join("") || "<p>No attachments.</p>"}</section>${conversation}<div class="workspace-actions">${actions}${(record.status !== "draft" && (isSender || recipient)) ? '<button class="workspace-primary" type="submit">Send reply</button>' : ""}</div><p id="form-error" role="alert" hidden></p></form>` : `<form id="account-rfi-form">${fields}<p id="form-error" role="alert" hidden></p><div class="workspace-actions"><button type="button" data-close>Cancel</button><button class="workspace-primary" type="submit">Save RFI</button></div></form>`}</div>`;
+  accountSelected = record?.id || null; if (!dialog.open) dialog.showModal();
+}
+async function saveAccount(event) {
+  event.preventDefault(); if (accountBusy) return; accountBusy = true;
+  const button = event.target.querySelector('[type="submit"]'); if (button) button.disabled = true;
+  try {
+    if (!accountSelected) {
+      const values = Object.fromEntries(new FormData(event.target));
+      const files = await Promise.all(Array.from(event.target.elements.files.files).map(file => new Promise((resolve, reject) => { if (file.size > 1024 * 1024) return reject(new Error(`${file.name} exceeds 1 MB.`)); const type = file.type || ({ pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" }[file.name.split(".").pop().toLowerCase()]); if (!["application/pdf", "image/png", "image/jpeg"].includes(type)) return reject(new Error("Use PDF, PNG, or JPEG attachments.")); const reader = new FileReader(); reader.onload = () => resolve({ name: file.name, type, bytes: file.size, data: String(reader.result).split(",")[1] }); reader.onerror = reject; reader.readAsDataURL(file); })));
+      if (files.length > 3) throw new Error("Attach no more than 3 files.");
+      const created = await accountApi("/rfis", { ...values, send: !!values.send, files }); accountRecords.unshift(created.rfi);
+    } else if (String(new FormData(event.target).get("message") || "").trim()) {
+      const updated = await accountApi(`/rfis/${accountSelected}`, { message: new FormData(event.target).get("message") }); accountRecords = accountRecords.map(r => r.id === updated.rfi.id ? updated.rfi : r);
+    } else throw new Error("Enter a response before sending.");
+    dialog.close(); renderAccountWorkspace();
+  } catch (e) { const error = byId("form-error"); if (error) { error.textContent = e.message; error.hidden = false; } else notice.textContent = e.message; }
+  finally { accountBusy = false; if (button) button.disabled = false; }
 }
 
 function render() {
@@ -260,6 +314,7 @@ function details(record) {
       ${fact("Location", record.location)}${fact("Drawing / specification", record.reference)}
       ${fact("Requested by date", record.requestedBy)}${fact("Confirmed due date", record.due)}
       ${fact("Submitted by", `${record.originator} · ${record.originCompany}`)}
+      ${fact("Recipient email", record.recipientEmail)}
       ${fact("Responsible company", record.responsibleCompany)}${fact("Technical responder", record.assignee)}
       ${fact("Next owner", nextOwner(record))}
     </dl>
@@ -301,8 +356,10 @@ function showDialog(record, action = "") {
   if (["edit", "create", "revise"].includes(action)) {
     fields = field("Subject", "title", record?.title, { required: true }) +
       field("Location", "location", record?.location, { required: true }) +
-      field("Drawing / specification reference", "reference", record?.reference) +
+      field("Drawing / specification reference", "reference", record?.reference, { required: true }) +
       field("Original question", "question", record?.question, { required: true, multiline: true }) +
+      field("Recipient email", "recipientEmail", record?.recipientEmail, { type: "email", required: true }) +
+      field("Due date", "due", record?.due, { type: "date", required: true }) +
       field("Requested by date", "requestedBy", record?.requestedBy, { type: "date" }) +
       field("Attachment reference (optional)", "attachment", record?.attachments.join(", ")) +
       '<label>Add supporting files<input type="file" name="files" accept=".pdf,.png,.jpg,.jpeg" multiple></label><p class="workspace-secondary">PDF, PNG or JPEG · Up to 3 files, 1 MB each. Existing attachments are retained.</p>';
@@ -378,6 +435,9 @@ async function saveAction(event) {
       if (!String(values.get(input.name) ?? "").trim()) throw new Error("Complete each required field.");
     }
     const value = (key) => String(values.get(key) || "").trim();
+    if (mode === "submit" && (!record.title?.trim() || !record.location?.trim() || !record.reference?.trim() || !record.question?.trim() || !record.recipientEmail?.trim() || !record.due)) {
+      throw new Error("Complete the subject, location, drawing/specification reference, question, recipient email, and due date before sending.");
+    }
     let activity = mode === "submit" && record.status === "clarification" ? "Sent clarification to responder" : actionLabels[mode];
     switch (mode) {
       case "revise":
@@ -393,7 +453,7 @@ async function saveAction(event) {
             location: record.location, requestedBy: record.requestedBy,
           });
         }
-        for (const key of ["title", "location", "reference", "question", "requestedBy"]) record[key] = value(key);
+        for (const key of ["title", "location", "reference", "question", "recipientEmail", "due", "requestedBy"]) record[key] = value(key);
         record.attachments = value("attachment") ? [value("attachment")] : [];
         record.files = [...(record.files || []), ...uploaded];
         if (record.files.length > 3) throw new Error("This RFI already has supporting files. A maximum of 3 files is supported.");
@@ -442,6 +502,15 @@ async function saveAction(event) {
 content.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (sessionStorage.getItem("info492-workspace-token")) {
+    if (button.hasAttribute("data-account-new")) accountForm();
+    if (button.dataset.accountRfi) {
+      accountApi(`/rfis/${button.dataset.accountRfi}`).then(({ rfi }) => accountForm(rfi)).catch(e => { notice.textContent = e.message; notice.hidden = false; });
+    }
+    if (button.dataset.accountStatus && accountSelected) accountApi(`/rfis/${accountSelected}`, { status: button.dataset.accountStatus }).then(({ rfi }) => { accountRecords = accountRecords.map(r => r.id === rfi.id ? rfi : r); dialog.close(); renderAccountWorkspace(); }).catch(e => { notice.textContent = e.message; notice.hidden = false; });
+    if (button.dataset.accountFile !== undefined && accountSelected) fetch(`/api/workspace/rfis/${accountSelected}/attachments/${button.dataset.accountFile}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("info492-workspace-token")}` } }).then(async response => { if (!response.ok) throw new Error("Attachment access denied."); const blob = await response.blob(); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = accountRecords.find(r => r.id === accountSelected)?.files?.[Number(button.dataset.accountFile)]?.name || "attachment"; link.click(); URL.revokeObjectURL(link.href); }).catch(e => { notice.textContent = e.message; notice.hidden = false; });
+    return;
+  }
   notice.hidden = true;
   if (button.hasAttribute("data-tab")) {
     tab = Number(button.dataset.tab);
@@ -474,6 +543,10 @@ content.addEventListener("change", (event) => {
 dialog.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (sessionStorage.getItem("info492-workspace-token") && button.dataset.accountStatus && accountSelected) {
+    accountApi(`/rfis/${accountSelected}`, { status: button.dataset.accountStatus }).then(({ rfi }) => { accountRecords = accountRecords.map(r => r.id === rfi.id ? rfi : r); dialog.close(); renderAccountWorkspace(); }).catch(e => { const message = byId("form-error"); if (message) { message.textContent = e.message; message.hidden = false; } });
+    return;
+  }
   if (button.hasAttribute("data-close")) dialog.close();
   const record = records.find(({ id }) => id === selected);
   if (button.hasAttribute("data-back")) {
@@ -484,7 +557,7 @@ dialog.addEventListener("click", (event) => {
     showDialog(record, button.dataset.action);
   }
 });
-dialog.addEventListener("submit", saveAction);
+dialog.addEventListener("submit", (event) => sessionStorage.getItem("info492-workspace-token") ? saveAccount(event) : saveAction(event));
 window.addEventListener("pageshow", (event) => {
   if (event.persisted) window.location.reload();
 });

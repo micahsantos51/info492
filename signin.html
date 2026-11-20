@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="css/style.css?v=20261007-2" />
     <link rel="stylesheet" href="css/dashboard.css?v=20261012-2" />
     <link rel="stylesheet" href="css/role-access.css?v=20261103-1" />
-    <script type="module" src="js/signin.js?v=20261112-1"></script>
+    <script type="module" src="js/signin.js?v=20261120-3"></script>
   </head>
   <body class="dash signin-page">
     <header class="dash-header">
@@ -20,23 +20,36 @@
       <section class="signin-card" aria-labelledby="signin-title">
         <p class="overline">CONSTRUCTION RFI WORKSPACE</p>
         <h1 id="signin-title">Sign in</h1>
-        <p>Choose a demo role to enter the project workspace.</p>
-        <form id="signin-form">
-          <label>Role
-            <select name="role" required>
-              <option value="submitter">RFI submitter</option>
-              <option value="checker">Checker</option>
-              <option value="responder">Responder</option>
-              <option value="manager">Schedule manager</option>
-              <option value="reader">Reader</option>
-            </select>
-          </label>
+        <p id="signin-instruction">Sign in with your email and password. If the email is new, we’ll switch to account setup.</p>
+        <form id="signin-form" method="post">
+          <label id="role-field" hidden>Workspace role<select name="role">
+            <option value="submitter">RFI submitter</option>
+            <option value="responder">Responder</option>
+            <option value="checker">Checker</option>
+          </select></label>
+          <label id="name-field" hidden>Your name<input name="name" autocomplete="name" /></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
           <p id="signin-error" class="signin-error" role="alert" hidden></p>
-          <button class="primary-button" type="submit">Continue to workspace</button>
+          <button class="primary-button" type="submit">Sign in</button>
         </form>
+        <p class="signin-note"><button id="account-mode" type="button">Create an account instead</button></p>
+        <details class="signin-note"><summary>Open the local demo</summary><form id="demo-form"><label>Demo role<select name="role"><option value="submitter">RFI submitter</option><option value="responder">Responder</option><option value="checker">Checker</option></select></label><button class="primary-button" type="submit">Continue to local demo</button></form><p>Local demo activity remains in this browser and does not use account-based permissions.</p></details>
         <p class="signin-note"><a href="demo3.html">Open Demo 3 · Live AI review board ↗</a></p>
-        <p class="signin-note">Demo workspace · Uses fictional records and saves activity in this browser.</p>
+        <p class="signin-note">Your saved email and password reopen the same account and its RFIs. Choose a role when creating a new account. Email notifications are not configured.</p>
       </section>
     </main>
+    <script>
+      if (location.protocol === "file:") {
+        const form = document.getElementById("signin-form");
+        const error = document.getElementById("signin-error");
+        error.textContent = "This page was opened as a local file, so account sign-in cannot reach the RFI service. Run npm start and open the local sign-in URL printed by the server.";
+        error.hidden = false;
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          error.textContent = "Use the local sign-in URL printed by npm start so your sign-in stays connected to the account service.";
+        });
+      }
+    </script>
   </body>
 </html>

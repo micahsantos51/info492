@@ -4,6 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { timingSafeEqual } from "node:crypto";
+import { RfiWorkspace } from "./rfi-workspace.js";
 import { makeAgent } from "./agent.js";
 import { MAX_BYTES } from "../js/demo2-core.js";
 import {
@@ -43,6 +44,8 @@ export async function createServer({
   const publicDemo = env.DEMO2_PUBLIC_DEMO === "true";
   const publicBudget = publicDemoBudget(now);
   const jevBudget = publicJevBudget(now);
+  const rfiWorkspace = new RfiWorkspace(env.RFI_STORE_PATH || resolve(root, "server-data/rfi-workspace.json"));
+  await rfiWorkspace.load();
   const config = () => ({ ...agent.config(), access: {
     mode: publicDemo ? "public_demo" : "team_token",
     token_required: !publicDemo,
@@ -54,6 +57,12 @@ export async function createServer({
     active = 0;
   const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin;
+    const ownProtocol = req.socket.encrypted ? "https:" : "http:";
+    let sameOrigin = false;
+    if (origin && req.headers.host) {
+      try { sameOrigin = new URL(origin).origin === new URL(`${ownProtocol}//${req.headers.host}`).origin; }
+      catch { sameOrigin = false; }
+    }
     const json = (status, data) => {
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(data));
@@ -61,7 +70,7 @@ export async function createServer({
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "no-referrer");
-    if (origin && !origins.includes(origin))
+    if (origin && !origins.includes(origin) && !sameOrigin)
       return json(403, {
         error: "Origin not allowed. Configure ALLOWED_ORIGINS on the backend.",
       });
@@ -80,6 +89,36 @@ export async function createServer({
     }
     const path = new URL(req.url, "http://localhost").pathname;
     try {
+      if (path.startsWith("/api/workspace/")) {
+        if (req.method !== "GET" && !/^application\/json(?:;|$)/i.test(req.headers["content-type"] || "")) return json(415, { error: "Use application/json." });
+        let body = {};
+        if (req.method !== "GET") {
+          let bytes = 0; const chunks = [];
+          for await (const chunk of req) { bytes += chunk.length; if (bytes > 5_000_000) return json(413, { error: "Request exceeds 5 MB." }); chunks.push(chunk); }
+          try { body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks))); }
+          catch { return json(400, { error: "Invalid JSON request." }); }
+        }
+        const bearer = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+        if (path === "/api/workspace/register" && req.method === "POST") return json(201, await rfiWorkspace.register(body));
+        if (path === "/api/workspace/login" && req.method === "POST") return json(200, await rfiWorkspace.login(body));
+        if (path === "/api/workspace/logout" && req.method === "POST") { await rfiWorkspace.logout(bearer); return json(200, { ok: true }); }
+        const user = rfiWorkspace.require(bearer);
+        if (path === "/api/workspace/me" && req.method === "GET") return json(200, { user: rfiWorkspace.publicUser(user) });
+        if (path === "/api/workspace/rfis" && req.method === "GET") return json(200, { rfis: rfiWorkspace.list(user) });
+        if (path === "/api/workspace/rfis" && req.method === "POST") return json(201, { rfi: await rfiWorkspace.create(body, user) });
+        const match = path.match(/^\/api\/workspace\/rfis\/([a-f0-9]+)(?:\/(messages|attachments\/\d+))?$/);
+        if (match && req.method === "GET") {
+          const rfi = rfiWorkspace.get(match[1], user);
+          if (match[2]?.startsWith("attachments/")) {
+            const file = rfi.files[Number(match[2].split("/")[1])];
+            if (!file) return json(404, { error: "Attachment not found." });
+            res.writeHead(200, { "Content-Type": file.type, "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.name)}` }); return res.end(Buffer.from(file.data, "base64"));
+          }
+          return json(200, { rfi });
+        }
+        if (match && req.method === "POST" && !match[2]) return json(200, { rfi: await rfiWorkspace.mutate(match[1], body, user) });
+        return json(404, { error: "Unknown workspace route." });
+      }
       if (path === "/api/config" && req.method === "GET")
         return json(200, config());
       if (path === "/api/jev/config" && req.method === "GET")
@@ -283,6 +322,7 @@ export async function createServer({
       )
         return json(404, { error: "Not found." });
       const file = resolve(root, local);
+      if (file === resolve(rfiWorkspace.path)) return json(404, { error: "Not found." });
       if (!(await stat(file)).isFile())
         return json(404, { error: "Not found." });
       const types = {
@@ -301,8 +341,8 @@ export async function createServer({
       );
       res.writeHead(200);
       res.end(req.method === "HEAD" ? undefined : await readFile(file));
-    } catch {
-      if (!res.headersSent) json(404, { error: "Resource unavailable." });
+    } catch (error) {
+      if (!res.headersSent) json(error.status || 404, { error: error.status ? error.message : "Resource unavailable.", ...(error.code ? { code: error.code } : {}) });
       else res.end();
     }
   });
