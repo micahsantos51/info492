@@ -41,6 +41,15 @@ export function mergeRfiRecords(board, records, origin = 'user-import') {
   board.updated = new Date().toISOString();
   return {added, updated};
 }
+export function mergeAccountRfiRecords(board, records, origin) {
+  const merged = mergeRfiRecords(board, records, origin);
+  const sourceById = new Map(records.map(record => [record.rfi_id, record]));
+  for (const item of board.items) {
+    const source = sourceById.get(item.record.rfi_id);
+    if (item.origin === origin && source) item.record = { ...item.record, ...source };
+  }
+  return merged;
+}
 export function applyJevClassification(item, evaluation, inputKey) {
   const priority = {high:'P0', mid:'P1', low:'P2'}[evaluation.category] || null;
   item.classification = {category:evaluation.category, confidence:evaluation.confidence};
@@ -55,6 +64,10 @@ export function applyJevClassification(item, evaluation, inputKey) {
   return item;
 }
 export function due(item) { return validDate(item.due_override) ? item.due_override : validDate(item.result.decision_date) ? item.result.decision_date : ''; }
+export function cardDueDate(item, kind) {
+  if (kind === 'suggested') return validDate(item.due_override) ? item.due_override : item.record.due_date || '';
+  return due(item) || (validDate(item.record.due_date) ? item.record.due_date : '');
+}
 export function rankable(item) { return ['P0','P1','P2'].includes(item.result.priority); }
 export function recommend(items, day) {
   return items.filter(x=>x.status==='suggested' && rankable(x)).sort((a,b)=>['P0','P1','P2'].indexOf(a.result.priority)-['P0','P1','P2'].indexOf(b.result.priority) || (due(a)||'9999').localeCompare(due(b)||'9999') || a.record.rfi_id.localeCompare(b.record.rfi_id) || a.key.localeCompare(b.key));
@@ -67,7 +80,13 @@ export function change(board, key, action, payload={}, day=today()) {
   if(action==='add') { if(x.status==='planned') return; if(!rankable(x)) throw Error('Classify this RFI before adding it to the plan.'); x.status='planned'; x.plan_date=day; x.order=Math.max(0,...board.items.map(i=>i.order))+1; }
   else if(action==='remove') {x.status='suggested';x.plan_date=null;}
   else if(action==='snooze') { if(!validDate(payload.date)||payload.date<=day||!payload.reason?.trim()) throw Error('Choose a future follow-up date and enter a reason.');x.status='snoozed';x.wake_date=payload.date;x.snooze_reason=payload.reason.trim(); }
-  else if(action==='review') { if(!payload.outcome || !payload.note?.trim()) throw Error('Choose an outcome and record your action.'); if(payload.followup && (!validDate(payload.followup)||payload.followup<=day)) throw Error('Follow-up must be after today.'); x.status='reviewed';x.reviewed_date=day;x.outcome=payload.outcome;x.note=payload.note.trim();x.followup=payload.followup||''; x.followup_due=''; }
+  else if(action==='review') {
+    const note = (payload.note || '').trim();
+    const noteOptional = ['Follow-up scheduled', 'Reviewed — no further action today'].includes(payload.outcome);
+    if(!payload.outcome || (!note && !noteOptional)) throw Error('Choose an outcome and record your action.');
+    if(payload.followup && (!validDate(payload.followup)||payload.followup<=day)) throw Error('Follow-up must be after today.');
+    x.status='reviewed';x.reviewed_date=day;x.outcome=payload.outcome;x.note=note;x.followup=payload.followup||''; x.followup_due='';
+  }
   else throw Error('Unknown task action.');
   board.audit.push({at:new Date().toISOString(), day, key, action, ...payload}); board.audit=board.audit.slice(-2000);
 }

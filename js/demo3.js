@@ -1,4 +1,4 @@
-import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, applyJevClassification, due, cardDueDate, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard } from './demo3-core.js?v=20261119-due-date';
+import { BOARD_KEY, emptyBoard, today, validDate, normalizeRfiRecords, mergeRfiRecords, mergeAccountRfiRecords, applyJevClassification, due, cardDueDate, rankable, recommend, wakeSnoozed, change, reorder, planCandidates, generatePlan, resetDemoBoard } from './demo3-core.js?v=20261119-account-record-preservation';
 import { JEV_PRIORITY_CATEGORIES, JEV_PRIORITY_LABELS } from './jev-priority.js?v=20261109-sharepoint';
 import { parseCSV } from './rfi-data.js?v=20261110-rfi-upload';
 import { workspaceFetch } from './workspace-api.js?v=20261120-api';
@@ -129,7 +129,7 @@ async function startAccountBoard() {
     try { const saved = JSON.parse(localStorage.getItem(storageKey) || 'null'); board = saved?.version === 2 && Array.isArray(saved.items) && Array.isArray(saved.audit) ? saved : emptyBoard(); } catch { board = emptyBoard(); }
     const records = (await workspaceApi('/rfis')).rfis.filter(r => r.status !== 'draft' && r.recipientEmail === user.email).map(accountRecord);
     sampleOrigin = `account:${user.id}`; sampleRecords = records; sampleLoaded = true; selectedIds.clear();
-    if (records.length) mergeRfiRecords(board, records, sampleOrigin);
+    if (records.length) mergeAccountRfiRecords(board, records, sampleOrigin);
     const authorizedKeys = new Set(records.map(sourceKey)); board.items = board.items.filter(item => authorizedKeys.has(item.key));
     $('identity'); const identity = document.querySelector('header .role'); if (identity) identity.innerHTML = `${esc(user.name)}<small>${esc(user.email)} · responder</small>`;
     $('account-signout').hidden = false; $('account-signout').onclick = async () => { $('account-signout').disabled = true; try { await workspaceApi('/logout', {}); } finally { sessionStorage.removeItem('info492-workspace-token'); sessionStorage.removeItem('info492-workspace-user'); location.assign('signin.html'); } };

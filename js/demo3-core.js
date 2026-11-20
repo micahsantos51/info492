@@ -41,6 +41,15 @@ export function mergeRfiRecords(board, records, origin = 'user-import') {
   board.updated = new Date().toISOString();
   return {added, updated};
 }
+export function mergeAccountRfiRecords(board, records, origin) {
+  const merged = mergeRfiRecords(board, records, origin);
+  const sourceById = new Map(records.map(record => [record.rfi_id, record]));
+  for (const item of board.items) {
+    const source = sourceById.get(item.record.rfi_id);
+    if (item.origin === origin && source) item.record = { ...item.record, ...source };
+  }
+  return merged;
+}
 export function applyJevClassification(item, evaluation, inputKey) {
   const priority = {high:'P0', mid:'P1', low:'P2'}[evaluation.category] || null;
   item.classification = {category:evaluation.category, confidence:evaluation.confidence};

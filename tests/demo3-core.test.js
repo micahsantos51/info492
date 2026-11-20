@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyBoard,normalizeRfiRecords,mergeRfiRecords,applyJevClassification,cardDueDate,change,reorder,recommend,wakeSnoozed,validDate,generatePlan,planCandidates,resetDemoBoard} from '../js/demo3-core.js';
+import {emptyBoard,normalizeRfiRecords,mergeRfiRecords,mergeAccountRfiRecords,applyJevClassification,cardDueDate,change,reorder,recommend,wakeSnoozed,validDate,generatePlan,planCandidates,resetDemoBoard} from '../js/demo3-core.js';
 
 const records=[
   {rfi_id:'A',title:'Clarification',description:'Confirm the structural detail before proceeding.',submitted_date:'2026-10-29',due_date:'2026-11-02',package_id:'P'},
@@ -25,6 +25,16 @@ test('same imported record is refreshed without losing human planning fields',()
  const board=fixture(),a=board.items[0];change(board,a.key,'add',{},'2026-10-30');a.owner='GC';a.due_override='2026-11-05';
  mergeRfiRecords(board,[{...records[0],description:'Updated source description.'}]);
  assert.equal(board.items.length,2);assert.equal(a.owner,'GC');assert.equal(a.due_override,'2026-11-05');assert.equal(a.classification,null);assert.equal(a.status,'planned');
+});
+
+test('account RFI merges retain private routing and thread fields for API actions',()=>{
+ const board=emptyBoard(),origin='account:user-1';
+ const assigned={...records[0],id:'abc123',account_id:'abc123',sender_name:'Sender',sender_email:'sender@example.com',files:[{name:'detail.pdf'}],messages:[{text:'Earlier reply'}],account_status:'submitted'};
+ mergeAccountRfiRecords(board,[assigned],origin);
+ const item=board.items[0];assert.equal(item.record.account_id,'abc123');assert.equal(item.record.sender_email,'sender@example.com');assert.equal(item.record.messages[0].text,'Earlier reply');
+ const updated={...assigned,account_status:'reviewed',messages:[...assigned.messages,{text:'New reply'}]};
+ mergeAccountRfiRecords(board,[updated],origin);
+ assert.equal(item.record.account_id,'abc123');assert.equal(item.record.account_status,'reviewed');assert.equal(item.record.messages.length,2);
 });
 
 test('cards fall back to the source due date when no planning or decision date exists',()=>{
