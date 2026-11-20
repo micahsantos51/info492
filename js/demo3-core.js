@@ -67,7 +67,13 @@ export function change(board, key, action, payload={}, day=today()) {
   if(action==='add') { if(x.status==='planned') return; if(!rankable(x)) throw Error('Classify this RFI before adding it to the plan.'); x.status='planned'; x.plan_date=day; x.order=Math.max(0,...board.items.map(i=>i.order))+1; }
   else if(action==='remove') {x.status='suggested';x.plan_date=null;}
   else if(action==='snooze') { if(!validDate(payload.date)||payload.date<=day||!payload.reason?.trim()) throw Error('Choose a future follow-up date and enter a reason.');x.status='snoozed';x.wake_date=payload.date;x.snooze_reason=payload.reason.trim(); }
-  else if(action==='review') { if(!payload.outcome || !payload.note?.trim()) throw Error('Choose an outcome and record your action.'); if(payload.followup && (!validDate(payload.followup)||payload.followup<=day)) throw Error('Follow-up must be after today.'); x.status='reviewed';x.reviewed_date=day;x.outcome=payload.outcome;x.note=payload.note.trim();x.followup=payload.followup||''; x.followup_due=''; }
+  else if(action==='review') {
+    const note = (payload.note || '').trim();
+    const noteOptional = ['Follow-up scheduled', 'Reviewed — no further action today'].includes(payload.outcome);
+    if(!payload.outcome || (!note && !noteOptional)) throw Error('Choose an outcome and record your action.');
+    if(payload.followup && (!validDate(payload.followup)||payload.followup<=day)) throw Error('Follow-up must be after today.');
+    x.status='reviewed';x.reviewed_date=day;x.outcome=payload.outcome;x.note=note;x.followup=payload.followup||''; x.followup_due='';
+  }
   else throw Error('Unknown task action.');
   board.audit.push({at:new Date().toISOString(), day, key, action, ...payload}); board.audit=board.audit.slice(-2000);
 }

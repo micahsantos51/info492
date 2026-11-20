@@ -37,6 +37,16 @@ test('snooze wakes on its date; review records an action without closing source 
  change(board,item.key,'review',{outcome:'Clarification requested',note:'Recorded follow-up'},'2026-10-30');assert.equal(item.status,'reviewed');assert.deepEqual(item.record,source);assert.equal(item.record.status,undefined);
 });
 
+test('review notes are optional for scheduled follow-up and no further action outcomes',()=>{
+ for(const outcome of ['Follow-up scheduled','Reviewed — no further action today']){
+  const board=fixture(),item=board.items[0];
+  change(board,item.key,'review',{outcome,note:''},'2026-10-30');
+  assert.equal(item.status,'reviewed');assert.equal(item.outcome,outcome);assert.equal(item.note,'');
+ }
+ const board=fixture();
+ assert.throws(()=>change(board,board.items[0].key,'review',{outcome:'Clarification requested',note:'  '},'2026-10-30'),/record your action/);
+});
+
 test('plan generation honors capacity, project scope and completed work',()=>{
  const board=fixture();board.capacity=3;const item=board.items[0];item.status='planned';item.manual=true;item.order=0;const other=structuredClone(board.items[1]);other.key='other';other.record.package_id='Other';other.status='planned';other.order=99;board.items.push(other);board.project='P';
  assert.equal(generatePlan(board,'2026-10-30'),2);assert.equal(board.items.find(x=>x.record.rfi_id==='B'&&x.key!=='other').order,0);assert.equal(item.order,1);assert.equal(item.manual,false);assert.equal(other.order,99);
