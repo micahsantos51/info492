@@ -119,13 +119,13 @@ async function startAccountBoard() {
 $('send-response').onclick = async () => {
   if (accountBusy || !active) return; const message = $('response-box').value.trim(); if (!message) { $('account-error').textContent = 'Enter a response before sending.'; $('account-error').hidden = false; return; }
   accountBusy = true; $('send-response').disabled = true;
-  try { const item = board.items.find(i => i.key === active), {rfi} = await workspaceApi(`/rfis/${item.record.account_id}`, {message}); item.record = accountRecord(rfi); $('response-box').value = ''; render(); openDetail(active); say('Response sent to the RFI conversation.'); }
+  try { const item = board.items.find(i => i.key === active), {rfi} = await workspaceApi(`/rfis/${item.record.account_id}/messages`, {message}); item.record = accountRecord(rfi); $('response-box').value = ''; render(); openDetail(active); say('Response sent to the RFI conversation.'); }
   catch (error) { $('account-error').textContent = error.message; $('account-error').hidden = false; }
   finally { accountBusy = false; $('send-response').disabled = false; }
 };
 $('mark-in-progress').onclick = async () => {
   if (accountBusy || !active) return; accountBusy = true; $('mark-in-progress').disabled = true;
-  try { const item = board.items.find(i => i.key === active), {rfi} = await workspaceApi(`/rfis/${item.record.account_id}`, {status:'in_progress'}); item.record = accountRecord(rfi); render(); openDetail(active); say('RFI marked In Progress.'); }
+  try { const item = board.items.find(i => i.key === active), {rfi} = await workspaceApi(`/rfis/${item.record.account_id}/status`, {status:'in_progress'}); item.record = accountRecord(rfi); render(); openDetail(active); say('RFI marked In Progress.'); }
   catch (error) { $('account-error').textContent = error.message; $('account-error').hidden = false; }
   finally { accountBusy = false; $('mark-in-progress').disabled = false; }
 };

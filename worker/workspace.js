@@ -159,7 +159,7 @@ export async function handleWorkspace(request, env, json) {
   if (!env.WORKSPACE_DB) return json(503,{error:"Cloudflare account storage is not configured."});
   try {
     const method = request.method;
-    const match = path.match(/^\/api\/workspace\/rfis\/([a-f0-9]+)(?:\/(messages|status|attachments\/\d+))?$/);
+    const match = path.match(/^\/api\/workspace\/rfis\/([a-z0-9_-]+)(?:\/(messages|status|attachments\/\d+))?$/i);
     if (path === "/api/workspace/register" && method === "POST") return json(201,await register(await readJson(request),env));
     if (path === "/api/workspace/login" && method === "POST") return json(200,await login(await readJson(request),env));
     if (path === "/api/workspace/logout" && method === "POST") {
@@ -185,7 +185,7 @@ export async function handleWorkspace(request, env, json) {
       }
       return json(200,{rfi});
     }
-    if (match && method === "POST" && (!match[2] || match[2] === "status")) return json(200,{rfi:await mutateRfi(match[1],await readJson(request),user,env)});
+    if (match && method === "POST" && (!match[2] || match[2] === "status" || match[2] === "messages")) return json(200,{rfi:await mutateRfi(match[1],await readJson(request),user,env)});
     return json(404,{error:"Unknown workspace route."});
   } catch (error) {
     return json(error.status || 500,{error:error.status ? error.message : "Workspace request failed.",...(error.code ? {code:error.code} : {})});

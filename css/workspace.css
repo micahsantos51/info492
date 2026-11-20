@@ -276,3 +276,45 @@ button.workspace-record {
 .workspace-source h3 { margin-bottom: 8px; }
 .workspace-source p { font-weight: 400; white-space: pre-wrap; }
 .workspace-file { display: block; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; color: #194b94; overflow-wrap: anywhere; }
+
+#account-rfi-form { display: grid; gap: 14px; }
+#account-rfi-form > label:not(.workspace-send-option) { display: grid; gap: 6px; font-size: 14px; font-weight: 700; }
+#account-rfi-form input:not([type="checkbox"]),
+#account-rfi-form select,
+#account-rfi-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 11px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+#account-rfi-form textarea { resize: vertical; line-height: 1.5; }
+#account-rfi-form input:focus,
+#account-rfi-form select:focus,
+#account-rfi-form textarea:focus { outline: 3px solid rgb(59 130 246 / 22%); border-color: #6f9bdd; }
+#account-rfi-form .workspace-send-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7faff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+#account-rfi-form .workspace-send-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 1px 0 0;
+  accent-color: #225fc7;
+}
+#account-rfi-form .workspace-send-option small { color: var(--muted); font-size: 13px; font-weight: 400; }

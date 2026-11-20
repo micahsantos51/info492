@@ -91,6 +91,8 @@ test("HTTP endpoints require sessions and enforce ownership for direct RFI reque
   const { rfi } = await sentResponse.json();
   const statusUpdate = await post(`/rfis/${rfi.id}/status`, { status: "in_progress" }, loggedIn.token);
   assert.equal(statusUpdate.status, 200, "the explicit status route updates the RFI");
+  const messageUpdate = await post(`/rfis/${rfi.id}/messages`, { message: "A route-specific reply." }, loggedIn.token);
+  assert.equal(messageUpdate.status, 200, "the explicit messages route appends a reply");
   assert.equal((await fetch(`${base}/api/workspace/rfis/${rfi.id}`)).status, 401);
   const other = await (await post("/register", { email: "other@example.com", password: "3", name: "Other", role: "submitter" })).json();
   const otherToken = (await (await post("/login", { email: "other@example.com", password: "3" })).json()).token;

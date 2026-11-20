@@ -106,7 +106,7 @@ export async function createServer({
         if (path === "/api/workspace/me" && req.method === "GET") return json(200, { user: rfiWorkspace.publicUser(user) });
         if (path === "/api/workspace/rfis" && req.method === "GET") return json(200, { rfis: rfiWorkspace.list(user) });
         if (path === "/api/workspace/rfis" && req.method === "POST") return json(201, { rfi: await rfiWorkspace.create(body, user) });
-        const match = path.match(/^\/api\/workspace\/rfis\/([a-f0-9]+)(?:\/(messages|status|attachments\/\d+))?$/);
+        const match = path.match(/^\/api\/workspace\/rfis\/([a-z0-9_-]+)(?:\/(messages|status|attachments\/\d+))?$/i);
         if (match && req.method === "GET") {
           const rfi = rfiWorkspace.get(match[1], user);
           if (match[2]?.startsWith("attachments/")) {
@@ -116,7 +116,7 @@ export async function createServer({
           }
           return json(200, { rfi });
         }
-        if (match && req.method === "POST" && (!match[2] || match[2] === "status")) return json(200, { rfi: await rfiWorkspace.mutate(match[1], body, user) });
+        if (match && req.method === "POST" && (!match[2] || match[2] === "status" || match[2] === "messages")) return json(200, { rfi: await rfiWorkspace.mutate(match[1], body, user) });
         return json(404, { error: "Unknown workspace route." });
       }
       if (path === "/api/config" && req.method === "GET")
